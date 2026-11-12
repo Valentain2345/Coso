@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#12161a" />
+    <meta name="description" content="Download Coso — record lectures and meetings, transcribe them on your device with Whisper, and export clean notes. Free, private, no servers." />
+    <meta property="og:title" content="Coso — lecture transcription, on your device" />
+    <meta property="og:description" content="Record, transcribe, edit and export — all on your own device. No servers, no accounts." />
+    <meta property="og:image" content="assets/icon-512.png" />
+    <link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Literata:ital,opsz,wght@0,7..72,400;1,7..72,400&display=swap"
+      rel="stylesheet"
+    />
+    <title>Coso — lecture transcription, on your device</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="#top">
+        <span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+        Coso
+      </a>
+      <button id="lang" class="lang" type="button" aria-label="Change language / Cambiar idioma">
+        <span class="lang-en">Español</span><span class="lang-es">English</span>
+      </button>
+    </header>
+
+    <main id="top">
+      <!-- Hero -->
+      <section class="hero">
+        <div class="hero-copy">
+          <h1 data-i18n="hero.title">Record the lecture.<br />Keep the transcript.</h1>
+          <p class="lead" data-i18n="hero.lead">
+            Coso records your lectures and transcribes them <strong>on your own device</strong>
+            with Whisper — nothing is ever uploaded. Edit speakers and timings, search, and
+            export to TXT, Word, PDF or subtitles.
+          </p>
+          <div class="downloads">
+            <a class="dl primary" id="dl-windows" data-i18n-attr="title:dl.windows.title" href="#" title="Download the Windows installer">
+              <span class="dl-icon" aria-hidden="true">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5 10.5 4.4v7.1H3V5.5Zm0 13 7.5 1.1v-7H3v5.9Zm8.5 1.2L21 21V12.5h-9.5v7.2Zm0-15.4v7.2H21V3l-9.5 1.3Z"/></svg>
+              </span>
+              <span class="dl-text">
+                <span class="dl-os" data-i18n="dl.windows.os">Windows</span>
+                <span class="dl-sub" data-i18n="dl.windows.sub">Installer · 22 MB</span>
+              </span>
+            </a>
+            <a class="dl" id="dl-android" data-i18n-attr="title:dl.android.title" href="#" title="Download the Android APK">
+              <span class="dl-icon" aria-hidden="true">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="m17.6 9.5 1.9-3.3a.4.4 0 0 0-.7-.4l-1.9 3.3A11.7 11.7 0 0 0 12 8.2c-1.7 0-3.4.3-4.9.9L5.2 5.8a.4.4 0 0 0-.7.4L6.4 9.5C4.3 10.7 2.9 12.7 2.7 15h18.6c-.2-2.3-1.6-4.3-3.7-5.5ZM7.5 13a.8.8 0 1 1 0-1.6.8.8 0 0 1 0 1.6Zm9 0a.8.8 0 1 1 0-1.6.8.8 0 0 1 0 1.6Z"/></svg>
+              </span>
+              <span class="dl-text">
+                <span class="dl-os" data-i18n="dl.android.os">Android</span>
+                <span class="dl-sub" data-i18n="dl.android.sub">APK · arm64</span>
+              </span>
+            </a>
+          </div>
+          <p class="dl-note" data-i18n="hero.note">
+            Also runs in the browser — open it and record without installing anything.
+          </p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <img src="assets/icon-512.png" alt="" width="180" height="180" />
+          <span class="wave big"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+        </div>
+      </section>
+
+      <!-- Features -->
+      <section class="features">
+        <h2 data-i18n="features.title">Everything a lecture needs</h2>
+        <div class="grid">
+          <article>
+            <h3 data-i18n="f1.title">100% on-device</h3>
+            <p data-i18n="f1.body">Whisper runs on your machine. No uploads, no accounts, works offline once models are cached.</p>
+          </article>
+          <article>
+            <h3 data-i18n="f2.title">Speakers separated</h3>
+            <p data-i18n="f2.body">Diarization tells voices apart, and you can rename “Speaker 2” to “Prof. Rivera” with one click.</p>
+          </article>
+          <article>
+            <h3 data-i18n="f3.title">Editable everything</h3>
+            <p data-i18n="f3.body">Fix a word, a timestamp or a speaker name right in the transcript — exports follow your edits.</p>
+          </article>
+          <article>
+            <h3 data-i18n="f4.title">Exports that fit</h3>
+            <p data-i18n="f4.body">TXT, Markdown, Word, PDF, SRT/VTT subtitles, JSON — or just the audio back.</p>
+          </article>
+          <article>
+            <h3 data-i18n="f5.title">Noise removal</h3>
+            <p data-i18n="f5.body">Neural denoising (DeepFilterNet) cleans up big-hall recordings before transcription.</p>
+          </article>
+          <article>
+            <h3 data-i18n="f6.title">English &amp; Spanish</h3>
+            <p data-i18n="f6.body">The interface and the installer speak your language, and Whisper transcribes dozens more.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- Install guides -->
+      <section class="guides">
+        <div class="guide">
+          <h2 data-i18n="g1.title">Install on Windows</h2>
+          <ol>
+            <li data-i18n="g1.s1">Download the installer above.</li>
+            <li data-i18n="g1.s2">Run it — the installer opens in your language.</li>
+            <li data-i18n="g1.s3">Launch <strong>Coso</strong> from the desktop or Start menu.</li>
+            <li data-i18n="g1.s4">Pick a Whisper model in Settings (small ones download in seconds).</li>
+          </ol>
+        </div>
+        <div class="guide">
+          <h2 data-i18n="g2.title">Install on Android</h2>
+          <ol>
+            <li data-i18n="g2.s1">Download the APK above on your phone.</li>
+            <li data-i18n="g2.s2">Allow “install unknown apps” for your browser, once.</li>
+            <li data-i18n="g2.s3">Open the APK and confirm the install.</li>
+            <li data-i18n="g2.s4">When exporting, the system file picker saves wherever you allow it.</li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- Privacy strip -->
+      <section class="privacy">
+        <blockquote data-i18n="privacy.quote">
+          Your recordings never leave your device. No telemetry, no cloud, no account —
+          the code is open and you can check.
+        </blockquote>
+      </section>
+    </main>
+
+    <footer>
+      <p data-i18n="footer.line">Coso — free, open-source lecture transcription.</p>
+      <p class="footer-links">
+        <a href="#" id="link-repo" data-i18n="footer.source">Source code</a> ·
+        <a href="#" id="link-issues" data-i18n="footer.issues">Report a problem</a>
+      </p>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Coso">
+  <rect width="512" height="512" rx="112" fill="#111618"/>
+  <g fill="none" stroke-linecap="round">
+    <path d="M128 256v0" stroke="#e4572e" stroke-width="34"/>
+    <path d="M176 212v88" stroke="#e4572e" stroke-width="34"/>
+    <path d="M224 168v176" stroke="#e4572e" stroke-width="34"/>
+    <path d="M272 200v112" stroke="#e4572e" stroke-width="34"/>
+    <path d="M320 232v48" stroke="#e4572e" stroke-width="34"/>
+    <path d="M368 248v16" stroke="#e4572e" stroke-width="34"/>
+  </g>
+</svg>

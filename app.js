@@ -1,0 +1,148 @@
+// Coso download page — bilingual (EN/ES), static, no dependencies.
+// ---------------------------------------------------------------------------
+// >>> EDIT THESE when you create the GitHub repository and its first release. <<<
+// Attach the release assets with these exact file names so "latest" links work:
+//   Windows: Coso-setup.exe      (the NSIS installer)
+//   Android: Coso.apk            (the release APK)
+const CONFIG = {
+  repo: 'USERNAME/REPO', // e.g. 'valen/coso'
+  windowsAsset: 'Coso-setup.exe',
+  androidAsset: 'Coso.apk',
+};
+// ---------------------------------------------------------------------------
+
+const TRANSLATIONS = {
+  en: {
+    'hero.title': 'Record the lecture.<br />Keep the transcript.',
+    'hero.lead':
+      'Coso records your lectures and transcribes them <strong>on your own device</strong> with Whisper — nothing is ever uploaded. Edit speakers and timings, search, and export to TXT, Word, PDF or subtitles.',
+    'hero.note': 'Also runs in the browser — open it and record without installing anything.',
+    'dl.windows.os': 'Windows',
+    'dl.windows.sub': 'Installer · 22 MB',
+    'dl.android.os': 'Android',
+    'dl.android.sub': 'APK · arm64',
+    'features.title': 'Everything a lecture needs',
+    'f1.title': '100% on-device',
+    'f1.body': 'Whisper runs on your machine. No uploads, no accounts, works offline once models are cached.',
+    'f2.title': 'Speakers separated',
+    'f2.body': 'Diarization tells voices apart, and you can rename “Speaker 2” to “Prof. Rivera” with one click.',
+    'f3.title': 'Editable everything',
+    'f3.body': 'Fix a word, a timestamp or a speaker name right in the transcript — exports follow your edits.',
+    'f4.title': 'Exports that fit',
+    'f4.body': 'TXT, Markdown, Word, PDF, SRT/VTT subtitles, JSON — or just the audio back.',
+    'f5.title': 'Noise removal',
+    'f5.body': 'Neural denoising (DeepFilterNet) cleans up big-hall recordings before transcription.',
+    'f6.title': 'English & Spanish',
+    'f6.body': 'The interface and the installer speak your language, and Whisper transcribes dozens more.',
+    'g1.title': 'Install on Windows',
+    'g1.s1': 'Download the installer above.',
+    'g1.s2': 'Run it — the installer opens in your language.',
+    'g1.s3': 'Launch <strong>Coso</strong> from the desktop or Start menu.',
+    'g1.s4': 'Pick a Whisper model in Settings (small ones download in seconds).',
+    'g2.title': 'Install on Android',
+    'g2.s1': 'Download the APK above on your phone.',
+    'g2.s2': 'Allow “install unknown apps” for your browser, once.',
+    'g2.s3': 'Open the APK and confirm the install.',
+    'g2.s4': 'When exporting, the system file picker saves wherever you allow it.',
+    'privacy.quote':
+      'Your recordings never leave your device. No telemetry, no cloud, no account — the code is open and you can check.',
+    'footer.line': 'Coso — free, open-source lecture transcription.',
+    'footer.source': 'Source code',
+    'footer.issues': 'Report a problem',
+  },
+  es: {
+    'hero.title': 'Graba la clase.<br />Quédate la transcripción.',
+    'hero.lead':
+      'Coso graba tus clases y las transcribe <strong>en tu propio dispositivo</strong> con Whisper — nunca se sube nada. Edita voces y tiempos, busca y exporta a TXT, Word, PDF o subtítulos.',
+    'hero.note': 'También funciona en el navegador — ábrelo y graba sin instalar nada.',
+    'dl.windows.os': 'Windows',
+    'dl.windows.sub': 'Instalador · 22 MB',
+    'dl.android.os': 'Android',
+    'dl.android.sub': 'APK · arm64',
+    'features.title': 'Todo lo que necesita una clase',
+    'f1.title': '100% en tu dispositivo',
+    'f1.body': 'Whisper corre en tu equipo. Sin subidas, sin cuentas, y funciona sin conexión una vez descargados los modelos.',
+    'f2.title': 'Voces separadas',
+    'f2.body': 'La diarización distingue las voces, y puedes renombrar «Voz 2» a «Prof. Rivera» con un clic.',
+    'f3.title': 'Todo es editable',
+    'f3.body': 'Corrige una palabra, un tiempo o el nombre de una voz dentro de la transcripción — las exportaciones siguen tus cambios.',
+    'f4.title': 'Exportaciones para todo',
+    'f4.body': 'TXT, Markdown, Word, PDF, subtítulos SRT/VTT, JSON — o solo el audio.',
+    'f5.title': 'Limpieza de ruido',
+    'f5.body': 'La eliminación neuronal de ruido (DeepFilterNet) limpia las grabaciones de salones grandes antes de transcribir.',
+    'f6.title': 'Español e inglés',
+    'f6.body': 'La interfaz y el instalador hablan tu idioma, y Whisper transcribe decenas más.',
+    'g1.title': 'Instalar en Windows',
+    'g1.s1': 'Descarga el instalador de arriba.',
+    'g1.s2': 'Ejecútalo — el instalador se abre en tu idioma.',
+    'g1.s3': 'Abre <strong>Coso</strong> desde el escritorio o el menú Inicio.',
+    'g1.s4': 'Elige un modelo Whisper en Ajustes (los pequeños se descargan en segundos).',
+    'g2.title': 'Instalar en Android',
+    'g2.s1': 'Descarga el APK de arriba en tu teléfono.',
+    'g2.s2': 'Permite «instalar apps desconocidas» para tu navegador, una sola vez.',
+    'g2.s3': 'Abre el APK y confirma la instalación.',
+    'g2.s4': 'Al exportar, el selector de archivos del sistema guarda donde tú le permitas.',
+    'privacy.quote':
+      'Tus grabaciones nunca salen de tu dispositivo. Sin telemetría, sin nube, sin cuenta — el código es abierto y puedes comprobarlo.',
+    'footer.line': 'Coso — transcripción de clases libre y de código abierto.',
+    'footer.source': 'Código fuente',
+    'footer.issues': 'Reportar un problema',
+  },
+};
+
+function setLang(lang) {
+  document.documentElement.lang = lang;
+  try {
+    localStorage.setItem('coso.pageLang', lang);
+  } catch {
+    /* private mode */
+  }
+  for (const el of document.querySelectorAll('[data-i18n]')) {
+    const value = TRANSLATIONS[lang][el.dataset.i18n];
+    if (value !== undefined) el.innerHTML = value;
+  }
+  document.title = lang === 'es' ? 'Coso — transcripción de clases, en tu dispositivo' : 'Coso — lecture transcription, on your device';
+}
+
+function initialLang() {
+  try {
+    const saved = localStorage.getItem('coso.pageLang');
+    if (saved === 'en' || saved === 'es') return saved;
+  } catch {
+    /* private mode */
+  }
+  return /^es\b/i.test(navigator.language || '') ? 'es' : 'en';
+}
+
+/** GitHub "latest release" asset URL. */
+function releaseUrl(asset) {
+  return `https://github.com/${CONFIG.repo}/releases/latest/download/${asset}`;
+}
+
+function wireLinks() {
+  const windows = document.getElementById('dl-windows');
+  const android = document.getElementById('dl-android');
+  const repo = document.getElementById('link-repo');
+  const issues = document.getElementById('link-issues');
+
+  if (CONFIG.repo === 'USERNAME/REPO') {
+    console.warn('Set CONFIG.repo in app.js to "<user>/<repo>" so download links work.');
+  }
+  windows.href = releaseUrl(CONFIG.windowsAsset);
+  android.href = releaseUrl(CONFIG.androidAsset);
+  repo.href = `https://github.com/${CONFIG.repo}`;
+  issues.href = `https://github.com/${CONFIG.repo}/issues`;
+
+  // Highlight the download for the visitor's platform (desktop-first).
+  if (/Android/i.test(navigator.userAgent)) {
+    android.classList.add('primary');
+    windows.classList.remove('primary');
+  }
+}
+
+document.getElementById('lang').addEventListener('click', () => {
+  setLang(document.documentElement.lang === 'es' ? 'en' : 'es');
+});
+
+wireLinks();
+setLang(initialLang());
