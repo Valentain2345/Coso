@@ -5,7 +5,7 @@
 //   Windows: Coso-setup.exe      (the NSIS installer)
 //   Android: Coso.apk            (the release APK)
 const CONFIG = {
-  repo: 'USERNAME/REPO', // e.g. 'valen/coso'
+  repo: 'Valentain2345/Coso', // e.g. 'valen/coso'
   windowsAsset: 'Coso-setup.exe',
   androidAsset: 'Coso.apk',
 };
