@@ -1,0 +1,27 @@
+[package]
+name = "coso"
+version = "2.0.0"
+description = "On-device lecture transcription with Whisper"
+authors = ["Coso"]
+license = "ISC"
+repository = ""
+edition = "2021"
+rust-version = "1.80"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "coso_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.4", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.12.5", features = [] }
+tauri-plugin-log = "2"
+tauri-plugin-dialog = "2.7.3"
+tauri-plugin-fs = "2.5.2"

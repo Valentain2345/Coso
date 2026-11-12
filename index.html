@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f1315" />
+    <meta
+      name="description"
+      content="Coso transcribes lectures and meetings on your device with Whisper. Record, edit, search, and export transcripts without sending audio to a server."
+    />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>Coso — lecture transcription, on your device</title>
+    <style>
+      /* Boot splash: shown instantly, removed once React mounts. */
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background: #12161a;
+        color: #edf0eb;
+        font-family: 'IBM Plex Sans', system-ui, sans-serif;
+        transition: opacity 0.25s ease;
+      }
+      @media (prefers-color-scheme: light) {
+        #boot { background: #fbfbf8; color: #15191b; }
+      }
+      #boot .boot-mark {
+        display: flex;
+        align-items: flex-end;
+        gap: 5px;
+        height: 34px;
+      }
+      #boot .boot-mark span {
+        width: 7px;
+        border-radius: 4px;
+        background: #d9502b;
+        animation: boot-wave 1.1s ease-in-out infinite;
+      }
+      #boot .boot-mark span:nth-child(1) { height: 12px; animation-delay: 0s; }
+      #boot .boot-mark span:nth-child(2) { height: 24px; animation-delay: 0.12s; }
+      #boot .boot-mark span:nth-child(3) { height: 34px; animation-delay: 0.24s; }
+      #boot .boot-mark span:nth-child(4) { height: 18px; animation-delay: 0.36s; }
+      #boot .boot-mark span:nth-child(5) { height: 10px; animation-delay: 0.48s; }
+      @keyframes boot-wave {
+        0%, 100% { transform: scaleY(0.55); }
+        50% { transform: scaleY(1); }
+      }
+      #boot .boot-name {
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+      #boot .boot-hint {
+        font-size: 12px;
+        opacity: 0.55;
+      }
+      #boot .boot-error {
+        display: none;
+        max-width: 34rem;
+        margin: 0 16px;
+        padding: 12px 16px;
+        border-radius: 10px;
+        background: rgba(217, 80, 43, 0.12);
+        border: 1px solid rgba(217, 80, 43, 0.4);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        white-space: pre-wrap;
+        word-break: break-word;
+        text-align: left;
+      }
+      #boot.boot-failed .boot-mark span { animation: none; }
+      #boot.boot-failed .boot-hint { display: none; }
+      #boot.boot-failed .boot-error { display: block; }
+      @media (prefers-reduced-motion: reduce) {
+        #boot .boot-mark span { animation: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="boot" role="status" aria-live="polite">
+      <div class="boot-mark" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+      <div class="boot-name">Coso</div>
+      <div class="boot-hint"></div>
+      <div class="boot-error"></div>
+    </div>
+    <script>
+      (function () {
+        var boot = document.getElementById('boot');
+        var hint = boot.querySelector('.boot-hint');
+        if (/^es\b/i.test(navigator.language || '')) {
+          hint.textContent = 'Cargando…';
+          document.documentElement.lang = 'es';
+        } else {
+          hint.textContent = 'Loading…';
+        }
+        window.__bootFail = function (message) {
+          if (!boot || boot.dataset.failed) return;
+          boot.dataset.failed = '1';
+          boot.classList.add('boot-failed');
+          boot.querySelector('.boot-error').textContent =
+            'The app failed to start.\n' + message;
+        };
+        // Turn a white screen into a visible diagnosis: any script error before
+        // React mounts is shown in the splash instead of failing silently.
+        window.addEventListener('error', function (event) {
+          var root = document.getElementById('root');
+          if (root && root.childElementCount > 0) return;
+          window.__bootFail((event && event.message) || 'Script error');
+        });
+        window.addEventListener('unhandledrejection', function (event) {
+          var root = document.getElementById('root');
+          if (root && root.childElementCount > 0) return;
+          var reason = event && event.reason;
+          window.__bootFail(String((reason && reason.stack) || (reason && reason.message) || reason || event));
+        });
+      })();
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
