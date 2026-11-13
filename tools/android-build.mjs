@@ -30,8 +30,8 @@ export function gradleExclusions(profile) {
 }
 
 /** Where Gradle puts the universal APK for the profile. */
-export function apkOutputPath(profile) {
-  const dir = path.join(GEN, 'app', 'build', 'outputs', 'apk', 'universal', profile);
+export function apkOutputPath(profile, baseDir = GEN) {
+  const dir = path.join(baseDir, 'app', 'build', 'outputs', 'apk', 'universal', profile);
   if (!fs.existsSync(dir)) return null;
   const apk = fs
     .readdirSync(dir)

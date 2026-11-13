@@ -5,7 +5,9 @@ import { ConfirmDialog } from './components/ConfirmDialog';
 import { DriveDialog } from './components/DriveDialog';
 import { ManualDialog } from './components/ManualDialog';
 import { PlayerBar } from './components/PlayerBar';
+import { PreviewCard } from './components/PreviewCard';
 import { ProgressCard } from './components/ProgressCard';
+import { QuickSettingsDialog } from './components/QuickSettingsDialog';
 import { SettingsDialog } from './components/SettingsDialog';
 import { Sidebar } from './components/Sidebar';
 import { ToastStack, useToasts } from './components/Toast';
@@ -33,6 +35,7 @@ import {
   vtt,
 } from './lib/export/formats';
 import { saveBlob } from './lib/export/save';
+import { applyReprocess } from './lib/session';
 import type { JobState, SessionMeta, TranscriptSegment } from './types';
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024 * 1024;
@@ -55,6 +58,10 @@ const App: React.FC = () => {
   const [driveOpen, setDriveOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<SessionMeta | null>(null);
+  const [pendingSource, setPendingSource] = useState<TranscribeSource | null>(null);
+  const [pendingReplaceId, setPendingReplaceId] = useState<string | null>(null);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickMode, setQuickMode] = useState<'preview' | 'reprocess'>('preview');
   const [storage, setStorage] = useState<{ usage: number; quota: number } | null>(null);
   const [lastSource, setLastSource] = useState<TranscribeSource | null>(null);
   const [starting, setStarting] = useState(false);
@@ -140,15 +147,29 @@ const App: React.FC = () => {
   }, [legacyId, legacyBlob, hasPeaks, store.update]);
 
   const beginTranscription = useCallback(
-    async (source: TranscribeSource, resume: JobState | null = null) => {
+    async (
+      source: TranscribeSource,
+      resume: JobState | null = null,
+      options?: { replaceSessionId?: string },
+    ) => {
       if (transcribingRef.current) return;
       transcribingRef.current = true;
       setLastSource(source);
+      setPendingSource(null);
+      setPendingReplaceId(options?.replaceSessionId ?? null);
       setResumable(null);
       try {
         await store.flush();
         const created = await transcription.run(source, settings, resume);
-        await store.add(created);
+        if (options?.replaceSessionId) {
+          // Re-run on an existing session: keep its identity and audio,
+          // replace only what the new run produced.
+          store.update((existing) =>
+            existing.id === options.replaceSessionId ? applyReprocess(existing, created) : existing,
+          );
+        } else {
+          await store.add(created);
+        }
         await refreshStorage();
         push(
           t('toast.transcriptReady.title'),
@@ -174,7 +195,7 @@ const App: React.FC = () => {
         await refreshJob();
       }
     },
-    [push, refreshJob, refreshStorage, settings, store.add, store.flush, transcription.run, t],
+    [push, refreshJob, refreshStorage, settings, store.add, store.update, store.flush, transcription.run, t],
   );
 
   const handleResumeJob = useCallback(
@@ -219,7 +240,7 @@ const App: React.FC = () => {
       push(t('toast.tooShort.title'), 'info', t('toast.tooShort.desc'));
       return;
     }
-    await beginTranscription({ blob: result.blob, name: null });
+    setPendingSource({ blob: result.blob, name: null });
   };
 
   const handleFile = async (file: File) => {
@@ -236,7 +257,7 @@ const App: React.FC = () => {
       push(t('toast.fileTooLarge.title'), 'error', t('toast.fileTooLarge.desc'));
       return;
     }
-    await beginTranscription({ blob: file, name: file.name });
+    setPendingSource({ blob: file, name: file.name });
   };
 
   const handleSelect = async (id: string) => {
@@ -246,6 +267,7 @@ const App: React.FC = () => {
     await store.open(id);
     transcription.clear();
     setLastSource(null);
+    setPendingSource(null);
     setSidebarOpen(false);
   };
 
@@ -256,6 +278,7 @@ const App: React.FC = () => {
     store.clearCurrent();
     transcription.clear();
     setLastSource(null);
+    setPendingSource(null);
     setSidebarOpen(false);
   };
 
@@ -268,6 +291,7 @@ const App: React.FC = () => {
     if (wasCurrent) {
       transcription.clear();
       setLastSource(null);
+    setPendingSource(null);
     }
     await refreshStorage();
     push(t('toast.sessionDeleted.title'), 'success', title);
@@ -354,8 +378,43 @@ const App: React.FC = () => {
     transcription.clear();
     if (!lastSource) return;
     const job = resumable && resumable.processed < resumable.duration - 1 ? resumable : null;
-    await beginTranscription(lastSource, job);
-  }, [beginTranscription, lastSource, resumable, transcription]);
+    await beginTranscription(
+      lastSource,
+      job,
+      pendingReplaceId ? { replaceSessionId: pendingReplaceId } : undefined,
+    );
+  }, [beginTranscription, lastSource, pendingReplaceId, resumable, transcription]);
+
+  const handlePreviewStart = () => {
+    if (!pendingSource) return;
+    void beginTranscription(pendingSource);
+  };
+
+  const handlePreviewSettings = () => {
+    setQuickMode('preview');
+    setQuickOpen(true);
+  };
+
+  const handleReprocess = useCallback(() => {
+    if (!store.current?.audioBlob) return;
+    setQuickMode('reprocess');
+    setQuickOpen(true);
+  }, [store.current]);
+
+  const handleQuickStart = () => {
+    setQuickOpen(false);
+    if (quickMode === 'preview') {
+      if (pendingSource) void beginTranscription(pendingSource);
+      return;
+    }
+    const session = store.current;
+    if (!session?.audioBlob) return;
+    void beginTranscription(
+      { blob: session.audioBlob, name: session.sourceName },
+      null,
+      { replaceSessionId: session.id },
+    );
+  };
 
   const handleClearAll = async () => {
     await clearSessions();
@@ -365,6 +424,7 @@ const App: React.FC = () => {
     await store.refresh();
     transcription.clear();
     setLastSource(null);
+    setPendingSource(null);
     await refreshStorage();
     push(t('toast.clearedAll.title'), 'success', t('toast.clearedAll.desc'));
   };
@@ -458,7 +518,16 @@ const App: React.FC = () => {
                 onDismiss={() => {
                   transcription.clear();
                   setLastSource(null);
+    setPendingSource(null);
                 }}
+              />
+            ) : pendingSource ? (
+              <PreviewCard
+                source={pendingSource}
+                busy={transcription.running}
+                onStart={handlePreviewStart}
+                onOpenSettings={handlePreviewSettings}
+                onCancel={() => setPendingSource(null)}
               />
             ) : recording ? (
               <CapturePanel {...capturePanelProps} />
@@ -469,6 +538,7 @@ const App: React.FC = () => {
                 onEditSegment={handleEditSegment}
                 onEditSegmentStart={handleEditSegmentStart}
                 onRenameSpeaker={handleRenameSpeaker}
+                onReprocess={handleReprocess}
                 onToast={push}
               />
             ) : (
@@ -507,6 +577,16 @@ const App: React.FC = () => {
       />
 
       <ManualDialog open={manualOpen} onClose={() => setManualOpen(false)} />
+
+      <QuickSettingsDialog
+        open={quickOpen}
+        mode={quickMode}
+        settings={settings}
+        busy={transcription.running}
+        onChange={setSettings}
+        onStart={handleQuickStart}
+        onClose={() => setQuickOpen(false)}
+      />
 
       <ConfirmDialog
         open={pendingDelete !== null}

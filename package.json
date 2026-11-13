@@ -1,8 +1,8 @@
 {
   "name": "coso-audio",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": true,
-  "description": "On-device lecture transcription with Whisper. Record, transcribe, edit, and export — all in the browser.",
+  "description": "On-device lecture transcription with Whisper. Record, transcribe, edit, and export - all in the browser.",
   "type": "module",
   "scripts": {
     "dev": "vite",

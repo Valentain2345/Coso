@@ -26,6 +26,77 @@ fn fit_window(window: &tauri::WebviewWindow) {  let Ok(Some(monitor)) = window.c
   let _ = window.center();
 }
 
+/// Repair Windows shortcuts left pointing at a folder that no longer exists
+/// (for example after the user moves or renames the install directory).
+/// Windows shortcuts store an absolute target path, so moving the app breaks
+/// them; this repoints any existing shortcut whose target is missing at the
+/// running executable. Shortcuts that are gone entirely are left alone: the
+/// installer creates them, and a user who deleted one did it on purpose.
+///
+/// Runs detached so a slow COM call never delays startup. Failures are
+/// silently ignored — a stale shortcut is cosmetic, never fatal.
+#[cfg(windows)]
+fn fix_shortcuts() {
+  use std::os::windows::process::CommandExt;
+  use std::process::{Command, Stdio};
+
+  let exe = match std::env::current_exe() {
+    Ok(path) => match path.into_os_string().into_string() {
+      Ok(path) => path,
+      Err(_) => return,
+    },
+    Err(_) => return,
+  };
+
+  // The script reads the executable path from the environment so the source
+  // contains no user-specific paths or quoting hazards.
+  let script = r#"
+$ErrorActionPreference = 'SilentlyContinue'
+$exe = $env:COSO_EXE
+if (-not $exe) { exit 0 }
+$shell = New-Object -ComObject WScript.Shell
+$targets = @(
+  (Join-Path $env:USERPROFILE 'Desktop\Coso.lnk'),
+  (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Coso.lnk')
+)
+foreach ($lnk in $targets) {
+  if (-not (Test-Path -LiteralPath $lnk)) { continue }
+  $sc = $shell.CreateShortcut($lnk)
+  $target = $sc.TargetPath
+  if ($target -and (Test-Path -LiteralPath $target)) { continue }
+  $sc.TargetPath = $exe
+  $sc.WorkingDirectory = Split-Path -Parent $exe
+  $sc.IconLocation = "$exe,0"
+  $sc.Save()
+}
+"#;
+
+  const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+  // "powershell" is not guaranteed to be on PATH; resolve it absolutely and
+  // fall back to PowerShell 7 when Windows PowerShell is absent.
+  let windows_powershell = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+  let shell = if std::path::Path::new(windows_powershell).exists() {
+    windows_powershell
+  } else {
+    "pwsh.exe"
+  };
+  let spawn = Command::new(shell)
+    .args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script])
+    .env("COSO_EXE", &exe)
+    .creation_flags(CREATE_NO_WINDOW)
+    .stdout(Stdio::null())
+    .stderr(Stdio::null())
+    .spawn();
+
+  // Fully detach: the app must not wait on the repair when closing.
+  if let Ok(child) = spawn {
+    std::thread::spawn(move || {
+      let mut child = child;
+      let _ = child.wait();
+    });
+  }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -44,6 +115,8 @@ pub fn run() {
         #[cfg(desktop)]
         fit_window(&window);
       }
+      #[cfg(all(desktop, windows))]
+      fix_shortcuts();
       Ok(())
     })
     .run(tauri::generate_context!())

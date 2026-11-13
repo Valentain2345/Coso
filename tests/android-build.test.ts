@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   apkOutputPath,
   buildEnv,
@@ -53,13 +56,35 @@ describe('buildEnv', () => {
 
 describe('apkOutputPath', () => {
   it('returns null when the profile has not been built yet', () => {
-    expect(apkOutputPath('release')).toBeNull();
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'coso-apk-'));
+    try {
+      expect(apkOutputPath('release', empty)).toBeNull();
+    } finally {
+      fs.rmSync(empty, { recursive: true, force: true });
+    }
   });
 
-  it('points at the newest debug APK that exists', () => {
+  it('points at the newest APK in the profile folder', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'coso-apk-'));
+    try {
+      const dir = path.join(base, 'app', 'build', 'outputs', 'apk', 'universal', 'debug');
+      fs.mkdirSync(dir, { recursive: true });
+      const old = path.join(dir, 'app-universal-old.apk');
+      const fresh = path.join(dir, 'app-universal-release.apk');
+      fs.writeFileSync(old, 'old');
+      fs.utimesSync(old, new Date(0), new Date(0));
+      fs.writeFileSync(fresh, 'fresh');
+      fs.utimesSync(fresh, new Date(Date.now() + 1000), new Date(Date.now() + 1000));
+      expect(apkOutputPath('debug', base)).toBe(fresh);
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to the real gen folder when no base is given', () => {
+    // Default-parameter wiring: whatever the real folder holds, the answer is
+    // either "nothing built" or a path to an actual APK — never a throw.
     const apk = apkOutputPath('debug');
-    expect(apk).toBeTruthy();
-    expect(apk).toContain('universal');
-    expect(apk).toMatch(/\.apk$/);
+    expect(apk === null || /\.apk$/.test(apk)).toBe(true);
   });
 });

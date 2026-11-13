@@ -79,6 +79,9 @@ export async function launchDesktop(): Promise<{ browser: Browser; page: Page }>
 
   const context = browser.contexts()[0];
   const page = context.pages()[0] ?? (await context.newPage());
+  // CDP can attach while the WebView is still parked on about:blank, where
+  // localStorage is denied; wait until the app origin has committed.
+  await page.waitForURL(/tauri\.localhost|tauri:\/\//, { timeout: 60_000 }).catch(() => undefined);
   return { browser, page };
 }
 

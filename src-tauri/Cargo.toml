@@ -1,6 +1,6 @@
 [package]
 name = "coso"
-version = "2.0.0"
+version = "2.0.1"
 description = "On-device lecture transcription with Whisper"
 authors = ["Coso"]
 license = "ISC"

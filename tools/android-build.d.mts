@@ -3,5 +3,5 @@ export declare function classifyTauriFailure(
   output: string,
 ): 'symlink' | 'cargo' | null;
 export declare function gradleExclusions(profile: string): string[];
-export declare function apkOutputPath(profile: string): string | null;
+export declare function apkOutputPath(profile: string, baseDir?: string): string | null;
 export declare function buildEnv(): NodeJS.ProcessEnv;

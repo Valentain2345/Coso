@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Copy, Pencil, Play, Search, X } from 'lucide-react';
+import { Check, Copy, Pencil, Play, RotateCcw, Search, X } from 'lucide-react';
 import type { Session, TranscriptSegment } from '../types';
 import type { usePlayer } from '../hooks/usePlayer';
 import { useI18n } from '../i18n';
@@ -13,6 +13,7 @@ interface Props {
   onEditSegment: (id: string, text: string) => void;
   onEditSegmentStart: (id: string, start: number) => void;
   onRenameSpeaker: (speaker: number, name: string) => void;
+  onReprocess?: () => void;
   onToast: (title: string, tone?: ToastTone, description?: string) => void;
 }
 
@@ -53,7 +54,7 @@ function segmentLine(speakerLabel: string, segment: TranscriptSegment): string {
   return `${speakerLabel} [${timestamp(segment.start)}] ${segment.text}`;
 }
 
-export const TranscriptView: React.FC<Props> = ({ session, player, onEditSegment, onEditSegmentStart, onRenameSpeaker, onToast }) => {
+export const TranscriptView: React.FC<Props> = ({ session, player, onEditSegment, onEditSegmentStart, onRenameSpeaker, onReprocess, onToast }) => {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [speaker, setSpeaker] = useState<number | null>(null);
@@ -220,6 +221,17 @@ export const TranscriptView: React.FC<Props> = ({ session, player, onEditSegment
             {editing ? <Check size={15} /> : <Pencil size={15} />}
             {editing ? t('common.done') : t('common.edit')}
           </button>
+
+          {session.audioBlob && onReprocess && (
+            <button
+              className="btn btn-ghost btn-small"
+              onClick={onReprocess}
+              title={t('transcript.reprocess.title')}
+            >
+              <RotateCcw size={15} />
+              {t('transcript.reprocess.label')}
+            </button>
+          )}
         </div>
       </header>
 

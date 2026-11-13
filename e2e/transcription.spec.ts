@@ -20,6 +20,10 @@ test('imports audio, transcribes on-device, and downloads the recording', async 
 
   await page.locator('input[type="file"]').setInputFiles(FIXTURE);
 
+  // The preview gate: listen to the first seconds and commit to the run.
+  await expect(page.locator('.preview-card')).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Transcribe all' }).click();
+
   // The first run downloads Whisper Base and the denoiser, then transcribes.
   await expect(page.locator('.progress-card')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('.transcript-card')).toBeVisible({ timeout: 12 * 60_000 });
@@ -31,6 +35,15 @@ test('imports audio, transcribes on-device, and downloads the recording', async 
 
   await expect(page.locator('.segment-speaker').first()).toContainText('Speaker 1');
   await expect(page.getByRole('region', { name: 'Audio player' })).toBeVisible();
+
+  // Re-process: run the same session again with new settings. The result must
+  // replace the transcript without creating a second session.
+  await page.getByRole('button', { name: 'Re-transcribe' }).click();
+  const quick = page.getByRole('dialog', { name: 'Re-transcribe' });
+  await expect(quick).toBeVisible();
+  await quick.getByRole('button', { name: 'Re-transcribe now' }).click();
+  await expect(page.locator('.progress-card')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('.transcript-card')).toBeVisible({ timeout: 5 * 60_000 });
 
   const downloadStarted = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download audio recording' }).click();
