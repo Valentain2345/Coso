@@ -50,4 +50,35 @@ test.describe('desktop shell', () => {
     await expect(page.getByRole('heading', { name: /Record a lecture/ })).toBeVisible();
     expect(errors).toEqual([]);
   });
+
+  // Regression: reopening the app used to leave the window stuck on the boot
+  // splash because a stale service worker intercepted the module bundle.
+  test('reopens reliably after being closed', async () => {
+    await closeDesktop(browser);
+
+    for (let cycle = 1; cycle <= 2; cycle += 1) {
+      const reopened = await launchDesktop();
+      try {
+        const lang = await reopened.page.evaluate(() => localStorage.getItem('coso.uiLang'));
+        if (lang !== 'en') {
+          await reopened.page.evaluate(() => localStorage.setItem('coso.uiLang', 'en'));
+          await reopened.page.reload();
+        }
+        await expect(
+          reopened.page.getByRole('heading', { name: /Record a lecture/ }),
+          `launch ${cycle} did not mount`,
+        ).toBeVisible({ timeout: 30_000 });
+        await expect(
+          reopened.page.locator('#boot'),
+          `launch ${cycle} stayed on the boot splash`,
+        ).toHaveCount(0, { timeout: 5_000 });
+        const controlled = await reopened.page.evaluate(() =>
+          Boolean(navigator.serviceWorker?.controller),
+        );
+        expect(controlled, `launch ${cycle} was controlled by a service worker`).toBe(false);
+      } finally {
+        await closeDesktop(reopened.browser);
+      }
+    }
+  });
 });

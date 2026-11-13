@@ -96,6 +96,9 @@ export const es: Dict = {
   'toast.clearedAll.title': 'Todo eliminado',
   'toast.clearedAll.desc': 'Se quitaron todas las transcripciones y grabaciones locales.',
 
+  'toast.repaired.title': 'Audio reparado',
+  'toast.repaired.desc': 'El audio limpio se usará para esta transcripción.',
+
   // Start warnings -----------------------------------------------------------
   'warning.thorough':
     'La separación de voces minuciosa re-analiza cada ventana, así que tarda más, pero distingue mejor voces parecidas.',
@@ -265,6 +268,8 @@ export const es: Dict = {
   'preview.settings': 'Ajustes rápidos',
   'preview.start': 'Transcribir todo',
   'preview.discard': 'Descartar grabación',
+  'preview.repair': 'Reparar audio',
+  'preview.enhanced': 'Reparado',
 
   'quick.titlePreview': 'Ajustes rápidos',
   'quick.titleReprocess': 'Re-transcribir',
@@ -272,6 +277,28 @@ export const es: Dict = {
   'quick.hint': 'Los cambios se aplican a esta pasada y quedan como tus ajustes.',
   'quick.start': 'Empezar transcripción',
   'quick.startReprocess': 'Re-transcribir ahora',
+  'quick.repair.field': 'Reparación de audio',
+
+  'repair.title': 'Reparar este audio',
+  'repair.description': 'Haz más clara una grabación difícil antes de transcribir. Se conserva el original.',
+  'repair.decoding': 'Leyendo el audio…',
+  'repair.decodeFailed': 'No se pudo decodificar este audio.',
+  'repair.preset.aria': 'Intensidad de la reparación',
+  'repair.preset.off': 'Original',
+  'repair.preset.off.note': 'Sin cambios',
+  'repair.preset.clean': 'Limpio',
+  'repair.preset.clean.note': 'Quita ruido y empareja el nivel',
+  'repair.preset.clear': 'Nítido',
+  'repair.preset.clear.note': 'Más reducción de ruido, presencia y compresión',
+  'repair.preset.far': 'Lejano',
+  'repair.preset.far.note': 'Para grabaciones distantes o apagadas',
+  'repair.hint': 'Compara los primeros {seconds} segundos antes de aplicar.',
+  'repair.original': 'Original',
+  'repair.repaired': 'Reparado',
+  'repair.keepsOriginal': 'La sesión conserva la grabación original.',
+  'repair.apply': 'Aplicar y usar',
+  'repair.processing': 'Reparando…',
+
   'transcript.speaker.rename.aria': 'Renombrar la voz {n}',
   'transcript.time.aria': 'Editar el tiempo de inicio, ahora {time}',
   'transcript.time.invalid': 'Usa un tiempo como 1:24 o 1:02:03.',

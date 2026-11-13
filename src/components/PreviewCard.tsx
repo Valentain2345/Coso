@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react';
-import { Loader2, Play, SlidersHorizontal, X } from 'lucide-react';
+import { Loader2, Play, SlidersHorizontal, Wand2, X } from 'lucide-react';
 import type { TranscribeSource } from '../hooks/useTranscription';
 import { useI18n } from '../i18n';
 
@@ -8,8 +8,11 @@ export const PREVIEW_SECONDS = 5;
 interface Props {
   source: TranscribeSource;
   busy?: boolean;
+  /** True when the source has already been repaired and the original is kept. */
+  enhanced?: boolean;
   onStart: () => void;
   onOpenSettings: () => void;
+  onRepair?: () => void;
   onCancel: () => void;
 }
 
@@ -27,7 +30,15 @@ function formatClock(seconds: number): string {
  * Plays the first PREVIEW_SECONDS seconds of a source so the user can judge
  * the recording before committing to a (potentially long) transcription run.
  */
-export const PreviewCard: React.FC<Props> = ({ source, busy = false, onStart, onOpenSettings, onCancel }) => {
+export const PreviewCard: React.FC<Props> = ({
+  source,
+  busy = false,
+  enhanced = false,
+  onStart,
+  onOpenSettings,
+  onRepair,
+  onCancel,
+}) => {
   const { t } = useI18n();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const urlRef = useRef<string | null>(null);
@@ -72,7 +83,10 @@ export const PreviewCard: React.FC<Props> = ({ source, busy = false, onStart, on
           </span>
         </span>
         <div className="preview-titles">
-          <h2>{t('preview.title')}</h2>
+          <h2>
+            {t('preview.title')}
+            {enhanced && <span className="preview-badge">{t('preview.enhanced')}</span>}
+          </h2>
           <p className="preview-source" title={source.name ?? undefined}>
             {source.name ?? t('preview.micSource')} · {formatBytes(source.blob.size)}
             {duration !== null ? ` · ${formatClock(duration)}` : ''}
@@ -114,6 +128,12 @@ export const PreviewCard: React.FC<Props> = ({ source, busy = false, onStart, on
           <SlidersHorizontal size={16} />
           {t('preview.settings')}
         </button>
+        {onRepair && (
+          <button className="btn btn-ghost" onClick={onRepair} disabled={busy}>
+            <Wand2 size={16} />
+            {t('preview.repair')}
+          </button>
+        )}
         <button className="btn btn-primary" onClick={onStart} disabled={busy}>
           {busy ? <Loader2 size={16} className="spin" /> : null}
           {t('preview.start')}

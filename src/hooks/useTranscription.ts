@@ -19,6 +19,13 @@ import { createJob, deleteJob, newId, updateJob } from '../lib/db';
 export interface TranscribeSource {
   blob: Blob;
   name: string | null;
+  /**
+   * Audio kept with the finished session. Repaired audio is a transient copy,
+   * so the original recording stays in the library and re-processing starts
+   * from the untouched file.
+   */
+  storeBlob?: Blob;
+  storeMime?: string;
 }
 
 const CHUNK_SECONDS = 90;
@@ -418,8 +425,8 @@ export function useTranscription() {
           wordCount: wordCount(finalSegments),
           sourceName: source.name ?? job.sourceName,
           segments: finalSegments,
-          audioBlob: source.blob,
-          audioMime: source.blob.type || job.audioMime || 'audio/webm',
+          audioBlob: source.storeBlob ?? source.blob,
+          audioMime: source.storeMime ?? (source.blob.type || job.audioMime || 'audio/webm'),
           peaks: normalizedPeaks,
         };
 

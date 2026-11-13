@@ -119,6 +119,44 @@
           var reason = event && event.reason;
           window.__bootFail(String((reason && reason.stack) || (reason && reason.message) || reason || event));
         });
+
+        // The Tauri shell must never be controlled by the offline service
+        // worker: in WebView2 it can intercept the module bundle and leave the
+        // window stuck on this splash. Drop stale registrations immediately.
+        var isTauriShell =
+          location.hostname === 'tauri.localhost' || !!window.__TAURI_INTERNALS__;
+        if (isTauriShell && navigator.serviceWorker) {
+          navigator.serviceWorker
+            .getRegistrations()
+            .then(function (registrations) {
+              registrations.forEach(function (registration) {
+                registration.unregister();
+              });
+            })
+            .catch(function () {});
+        }
+
+        // Last-resort watchdog: if React has not mounted, try one clean reload
+        // (which also bypasses a stale worker), then show the failure instead
+        // of an endless splash.
+        var RELOAD_KEY = 'coso.bootReload';
+        window.setTimeout(function () {
+          var current = document.getElementById('root');
+          if (current && current.childElementCount > 0) return;
+          if (boot && boot.dataset.failed) return;
+          var alreadyReloaded = false;
+          try {
+            alreadyReloaded = sessionStorage.getItem(RELOAD_KEY) === '1';
+          } catch (error) {}
+          if (!alreadyReloaded) {
+            try {
+              sessionStorage.setItem(RELOAD_KEY, '1');
+            } catch (error) {}
+            location.reload();
+            return;
+          }
+          window.__bootFail('The app did not respond. Close it and open it again.');
+        }, 15000);
       })();
     </script>
     <div id="root"></div>

@@ -86,8 +86,8 @@ npm run desktop        # development window
 npm run desktop:build  # installers in src-tauri/target/release/bundle
 ```
 
-The build writes `bundle/nsis/Coso_2.0.0_x64-setup.exe` and
-`bundle/msi/Coso_2.0.0_x64_en-US.msi`; either installs the app. On launch the
+The build writes `bundle/nsis/Coso_2.1.0_x64-setup.exe` and
+`bundle/msi/Coso_2.1.0_x64_en-US.msi`; either installs the app. On launch the
 window shrinks to fit small laptop screens and centres itself. The NSIS
 installer creates a **Coso** shortcut on the desktop in addition to the
 Start-menu entry (see `src-tauri/nsis-hooks.nsh`), shows in the user's language
@@ -209,6 +209,12 @@ system-browser OAuth flow mentioned above.
   once and stay cached; very large models are slow without WebGPU.
 - Noise removal: **Basic** spectral filter, **Neural** DeepFilterNet3, or
   **Maximum** (DeepFilterNet3 plus an extra spectral pass).
+- Audio repair (before transcribing, from the preview card or "Re-transcribe"):
+  **Clean**, **Clear** or **Far**. It runs high-pass filtering, spectral
+  denoising, a low-mid boom cut, presence/air EQ, gentle compression and RMS
+  levelling, so a distant or grainy recording sounds closer and clearer. The
+  original recording is always kept and the repaired WAV is used only for the
+  run.
 - Speaker precision: **Standard** or **Thorough** (denser windows, automatic
   voice count).
 - Speaker model: **WeSpeaker** (fast) or **Pyannote 3.0** segmentation with
@@ -235,6 +241,10 @@ Coverage:
   counted, cancel, localized permission error, unsupported browser.
 - `tests/components.test.tsx` — CapturePanel, SettingsDialog (including the
   language switch and in-place warning reveals), ProgressCard.
+- `tests/enhance.test.ts` — repair DSP primitives (EQ, compressor, levelling,
+  limiter), preset monotonicity, and an SNR improvement check on real speech.
+- `tests/repair.test.tsx` — repair dialog decode, preset selection, WAV output,
+  decode failures and A/B playback.
 - `e2e/start-screen.spec.ts`, `e2e/transcription.spec.ts` — real UI flows,
   including a full on-device transcription of `tests/fixtures/speech.wav`.
 - `e2e/language.spec.ts` — English↔Spanish switch persists and keeps the

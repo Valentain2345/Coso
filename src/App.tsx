@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { CapturePanel } from './components/CapturePanel';
+import { AudioRepairDialog } from './components/AudioRepairDialog';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { DriveDialog } from './components/DriveDialog';
 import { ManualDialog } from './components/ManualDialog';
@@ -36,6 +37,7 @@ import {
 } from './lib/export/formats';
 import { saveBlob } from './lib/export/save';
 import { applyReprocess } from './lib/session';
+import { repairAudio, type RepairPresetId } from './lib/audio/enhance';
 import type { JobState, SessionMeta, TranscriptSegment } from './types';
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024 * 1024;
@@ -62,6 +64,9 @@ const App: React.FC = () => {
   const [pendingReplaceId, setPendingReplaceId] = useState<string | null>(null);
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickMode, setQuickMode] = useState<'preview' | 'reprocess'>('preview');
+  const [quickRepair, setQuickRepair] = useState<RepairPresetId>('off');
+  const [repairOpen, setRepairOpen] = useState(false);
+  const [repairBusy, setRepairBusy] = useState(false);
   const [storage, setStorage] = useState<{ usage: number; quota: number } | null>(null);
   const [lastSource, setLastSource] = useState<TranscribeSource | null>(null);
   const [starting, setStarting] = useState(false);
@@ -402,18 +407,67 @@ const App: React.FC = () => {
   }, [store.current]);
 
   const handleQuickStart = () => {
-    setQuickOpen(false);
     if (quickMode === 'preview') {
+      setQuickOpen(false);
       if (pendingSource) void beginTranscription(pendingSource);
       return;
     }
     const session = store.current;
-    if (!session?.audioBlob) return;
-    void beginTranscription(
-      { blob: session.audioBlob, name: session.sourceName },
-      null,
-      { replaceSessionId: session.id },
+    if (!session?.audioBlob || repairBusy) return;
+    const original = session.audioBlob;
+    if (quickRepair === 'off') {
+      setQuickOpen(false);
+      void beginTranscription(
+        { blob: original, name: session.sourceName },
+        null,
+        { replaceSessionId: session.id },
+      );
+      return;
+    }
+    // Repair first, then replace the transcript; the original audio is kept.
+    // The dialog stays open (with a spinner) so a long DSP pass does not look
+    // like a frozen app, and it closes as soon as the repair is handed over.
+    setRepairBusy(true);
+    void repairAudio(original, quickRepair)
+      .then(({ blob }) => {
+        setRepairBusy(false);
+        setQuickOpen(false);
+        return beginTranscription(
+          {
+            blob,
+            name: session.sourceName,
+            storeBlob: original,
+            storeMime: session.audioMime ?? undefined,
+          },
+          null,
+          { replaceSessionId: session.id },
+        );
+      })
+      .catch((caught) => {
+        setRepairBusy(false);
+        push(
+          t('toast.failed.title'),
+          'error',
+          caught instanceof Error ? caught.message : t('toast.failed.desc'),
+        );
+      });
+  };
+
+  const handleRepairApply = (blob: Blob, preset: RepairPresetId) => {
+    setPendingSource((current) =>
+      current
+        ? {
+            ...current,
+            // Keep the untouched recording for the saved session.
+            storeBlob: current.storeBlob ?? current.blob,
+            storeMime: current.storeMime ?? current.blob.type,
+            blob,
+          }
+        : current,
     );
+    setRepairOpen(false);
+    setQuickRepair(preset);
+    push(t('toast.repaired.title'), 'success', t('toast.repaired.desc'));
   };
 
   const handleClearAll = async () => {
@@ -518,15 +572,17 @@ const App: React.FC = () => {
                 onDismiss={() => {
                   transcription.clear();
                   setLastSource(null);
-    setPendingSource(null);
+                  setPendingSource(null);
                 }}
               />
             ) : pendingSource ? (
               <PreviewCard
                 source={pendingSource}
-                busy={transcription.running}
+                busy={transcription.running || repairBusy}
+                enhanced={Boolean(pendingSource.storeBlob)}
                 onStart={handlePreviewStart}
                 onOpenSettings={handlePreviewSettings}
+                onRepair={() => setRepairOpen(true)}
                 onCancel={() => setPendingSource(null)}
               />
             ) : recording ? (
@@ -582,10 +638,20 @@ const App: React.FC = () => {
         open={quickOpen}
         mode={quickMode}
         settings={settings}
-        busy={transcription.running}
+        repair={quickRepair}
+        busy={transcription.running || repairBusy}
         onChange={setSettings}
+        onRepairChange={setQuickRepair}
         onStart={handleQuickStart}
         onClose={() => setQuickOpen(false)}
+      />
+
+      <AudioRepairDialog
+        open={repairOpen}
+        source={pendingSource ? pendingSource.storeBlob ?? pendingSource.blob : null}
+        sourceName={pendingSource?.name ?? null}
+        onApply={handleRepairApply}
+        onClose={() => setRepairOpen(false)}
       />
 
       <ConfirmDialog

@@ -8,6 +8,7 @@ import '@fontsource/literata/400-italic.css';
 import '@fontsource/literata/600.css';
 import './styles.css';
 import App from './App';
+import { isTauri } from './lib/tauri';
 
 const container = document.getElementById('root');
 if (!container) throw new Error('Root element is missing from index.html.');
@@ -18,7 +19,12 @@ createRoot(container).render(
   </React.StrictMode>,
 );
 
-// React has mounted: dismiss the boot splash.
+// React has mounted: dismiss the boot splash and clear the reload guard.
+try {
+  sessionStorage.removeItem('coso.bootReload');
+} catch {
+  // Storage can be unavailable in private modes; the guard is best-effort.
+}
 requestAnimationFrame(() => {
   const boot = document.getElementById('boot');
   if (!boot) return;
@@ -26,8 +32,20 @@ requestAnimationFrame(() => {
   window.setTimeout(() => boot.remove(), 300);
 });
 
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => undefined);
-  });
+// The app-shell service worker is a web/offline optimisation only. In WebView2
+// it can intercept the module bundle and leave the window stuck on the splash,
+// so the Tauri shell never registers it and removes any stale registration.
+if ('serviceWorker' in navigator) {
+  if (isTauri()) {
+    void navigator.serviceWorker
+      .getRegistrations()
+      .then((registrations) =>
+        Promise.all(registrations.map((registration) => registration.unregister())),
+      )
+      .catch(() => undefined);
+  } else if (import.meta.env.PROD) {
+    window.addEventListener('load', () => {
+      void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => undefined);
+    });
+  }
 }

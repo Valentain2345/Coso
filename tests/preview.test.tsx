@@ -115,6 +115,39 @@ describe('PreviewCard', () => {
       expect((screen.getByRole('button', { name: label }) as HTMLButtonElement).disabled).toBe(true);
     }
   });
+
+  it('opens the audio repair tool and marks a repaired source', () => {
+    const onRepair = vi.fn();
+    const { rerender } = render(
+      <PreviewCard
+        source={source()}
+        onStart={() => {}}
+        onOpenSettings={() => {}}
+        onRepair={onRepair}
+        onCancel={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Repair audio/i }));
+    expect(onRepair).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Repaired')).toBeNull();
+
+    rerender(
+      <PreviewCard
+        source={{ ...source(), storeBlob: source().blob }}
+        enhanced
+        onStart={() => {}}
+        onOpenSettings={() => {}}
+        onRepair={onRepair}
+        onCancel={() => {}}
+      />,
+    );
+    expect(screen.getByText('Repaired')).toBeTruthy();
+  });
+
+  it('does not offer repair without a handler', () => {
+    render(<PreviewCard source={source()} onStart={() => {}} onOpenSettings={() => {}} onCancel={() => {}} />);
+    expect(screen.queryByRole('button', { name: /Repair audio/i })).toBeNull();
+  });
 });
 
 /* -------------------------------------------------------- QuickSettingsDialog */
@@ -175,5 +208,45 @@ describe('QuickSettingsDialog', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: /Start transcribing/i }));
     expect(onStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers the repair preset only when re-transcribing', () => {
+    const { rerender } = render(
+      <QuickSettingsDialog open mode="preview" settings={settings()} onChange={() => {}} onStart={() => {}} onClose={() => {}} />,
+    );
+    expect(screen.queryByLabelText('Audio repair')).toBeNull();
+
+    rerender(
+      <QuickSettingsDialog
+        open
+        mode="reprocess"
+        settings={settings()}
+        repair="off"
+        onChange={() => {}}
+        onRepairChange={() => {}}
+        onStart={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect((screen.getByLabelText('Audio repair') as HTMLSelectElement).value).toBe('off');
+  });
+
+  it('reports the chosen repair preset upward', () => {
+    const onRepairChange = vi.fn();
+    render(
+      <QuickSettingsDialog
+        open
+        mode="reprocess"
+        settings={settings()}
+        repair="off"
+        onChange={() => {}}
+        onRepairChange={onRepairChange}
+        onStart={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Audio repair'), { target: { value: 'far' } });
+    expect(onRepairChange).toHaveBeenCalledWith('far');
+    expect((screen.getByLabelText('Audio repair') as HTMLSelectElement).options.length).toBe(4);
   });
 });

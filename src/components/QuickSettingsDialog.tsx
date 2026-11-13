@@ -8,6 +8,7 @@ import type {
   Settings,
 } from '../types';
 import { LANGUAGES, MODELS, spokenLanguageLabel } from '../lib/models';
+import { REPAIR_PRESETS, type RepairPresetId } from '../lib/audio/enhance';
 import { useI18n } from '../i18n';
 import { Modal } from './ui/Modal';
 
@@ -17,8 +18,11 @@ interface Props {
   open: boolean;
   mode: QuickSettingsMode;
   settings: Settings;
+  /** Audio repair preset applied before re-transcribing an existing session. */
+  repair?: RepairPresetId;
   busy?: boolean;
   onChange: (patch: Partial<Settings>) => void;
+  onRepairChange?: (preset: RepairPresetId) => void;
   onStart: () => void;
   onClose: () => void;
 }
@@ -32,8 +36,10 @@ export const QuickSettingsDialog: React.FC<Props> = ({
   open,
   mode,
   settings,
+  repair = 'off',
   busy = false,
   onChange,
+  onRepairChange,
   onStart,
   onClose,
 }) => {
@@ -126,6 +132,22 @@ export const QuickSettingsDialog: React.FC<Props> = ({
             </div>
           </div>
         </div>
+        {mode === 'reprocess' && onRepairChange && (
+          <label className="field">
+            <span>{t('quick.repair.field')}</span>
+            <select
+              aria-label={t('quick.repair.field')}
+              value={repair}
+              onChange={(event) => onRepairChange(event.target.value as RepairPresetId)}
+            >
+              {(Object.keys(REPAIR_PRESETS) as RepairPresetId[]).map((id) => (
+                <option key={id} value={id}>
+                  {t(`repair.preset.${id}`)} — {t(`repair.preset.${id}.note`)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <p className="settings-hint">{t('quick.hint')}</p>
       </div>
     </Modal>
