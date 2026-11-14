@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f1315" />
+    <meta
+      name="description"
+      content="Coso transcribes lectures and meetings on your device with Whisper. Record, edit, search, and export transcripts without sending audio to a server."
+    />
+    <link rel="icon" type="image/svg+xml" href="/Coso/app/icon.svg" />
+    <link rel="manifest" href="/Coso/app/manifest.webmanifest" />
+    <title>Coso — lecture transcription, on your device</title>
+    <style>#boot{z-index:9999;color:#edf0eb;background:#12161a;flex-direction:column;justify-content:center;align-items:center;gap:18px;font-family:IBM Plex Sans,system-ui,sans-serif;transition:opacity .25s;display:flex;position:fixed;inset:0}@media (prefers-color-scheme:light){#boot{color:#15191b;background:#fbfbf8}}#boot .boot-mark{align-items:flex-end;gap:5px;height:34px;display:flex}#boot .boot-mark span{background:#d9502b;border-radius:4px;width:7px;animation:1.1s ease-in-out infinite boot-wave}#boot .boot-mark span:first-child{height:12px;animation-delay:0s}#boot .boot-mark span:nth-child(2){height:24px;animation-delay:.12s}#boot .boot-mark span:nth-child(3){height:34px;animation-delay:.24s}#boot .boot-mark span:nth-child(4){height:18px;animation-delay:.36s}#boot .boot-mark span:nth-child(5){height:10px;animation-delay:.48s}@keyframes boot-wave{0%,to{transform:scaleY(.55)}50%{transform:scaleY(1)}}#boot .boot-name{letter-spacing:.02em;font-size:15px;font-weight:600}#boot .boot-hint{opacity:.55;font-size:12px}#boot .boot-error{font-variant-numeric:tabular-nums;white-space:pre-wrap;word-break:break-word;text-align:left;background:#d9502b1f;border:1px solid #d9502b66;border-radius:10px;max-width:34rem;margin:0 16px;padding:12px 16px;font-size:12px;display:none}#boot.boot-failed .boot-mark span{animation:none}#boot.boot-failed .boot-hint{display:none}#boot.boot-failed .boot-error{display:block}@media (prefers-reduced-motion:reduce){#boot .boot-mark span{animation:none}}</style>
+    <script type="module" crossorigin src="/Coso/app/assets/index-CjQq9j9x.js"></script>
+    <link rel="stylesheet" crossorigin href="/Coso/app/assets/index-D9ILAD1j.css">
+  </head>
+  <body>
+    <div id="boot" role="status" aria-live="polite">
+      <div class="boot-mark" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+      <div class="boot-name">Coso</div>
+      <div class="boot-hint"></div>
+      <div class="boot-error"></div>
+    </div>
+    <script>
+      (function () {
+        var boot = document.getElementById('boot');
+        var hint = boot.querySelector('.boot-hint');
+        if (/^es\b/i.test(navigator.language || '')) {
+          hint.textContent = 'Cargando…';
+          document.documentElement.lang = 'es';
+        } else {
+          hint.textContent = 'Loading…';
+        }
+        window.__bootFail = function (message) {
+          if (!boot || boot.dataset.failed) return;
+          boot.dataset.failed = '1';
+          boot.classList.add('boot-failed');
+          boot.querySelector('.boot-error').textContent =
+            'The app failed to start.\n' + message;
+        };
+        // Turn a white screen into a visible diagnosis: any script error before
+        // React mounts is shown in the splash instead of failing silently.
+        window.addEventListener('error', function (event) {
+          var root = document.getElementById('root');
+          if (root && root.childElementCount > 0) return;
+          window.__bootFail((event && event.message) || 'Script error');
+        });
+        window.addEventListener('unhandledrejection', function (event) {
+          var root = document.getElementById('root');
+          if (root && root.childElementCount > 0) return;
+          var reason = event && event.reason;
+          window.__bootFail(String((reason && reason.stack) || (reason && reason.message) || reason || event));
+        });
+
+        // The Tauri shell must never be controlled by the offline service
+        // worker: in WebView2 it can intercept the module bundle and leave the
+        // window stuck on this splash. Drop stale registrations immediately.
+        var isTauriShell =
+          location.hostname === 'tauri.localhost' || !!window.__TAURI_INTERNALS__;
+        if (isTauriShell && navigator.serviceWorker) {
+          navigator.serviceWorker
+            .getRegistrations()
+            .then(function (registrations) {
+              registrations.forEach(function (registration) {
+                registration.unregister();
+              });
+            })
+            .catch(function () {});
+        }
+
+        // Last-resort watchdog: if React has not mounted, try one clean reload
+        // (which also bypasses a stale worker), then show the failure instead
+        // of an endless splash.
+        var RELOAD_KEY = 'coso.bootReload';
+        window.setTimeout(function () {
+          var current = document.getElementById('root');
+          if (current && current.childElementCount > 0) return;
+          if (boot && boot.dataset.failed) return;
+          var alreadyReloaded = false;
+          try {
+            alreadyReloaded = sessionStorage.getItem(RELOAD_KEY) === '1';
+          } catch (error) {}
+          if (!alreadyReloaded) {
+            try {
+              sessionStorage.setItem(RELOAD_KEY, '1');
+            } catch (error) {}
+            location.reload();
+            return;
+          }
+          window.__bootFail('The app did not respond. Close it and open it again.');
+        }, 15000);
+      })();
+    </script>
+    <div id="root"></div>
+  </body>
+</html>

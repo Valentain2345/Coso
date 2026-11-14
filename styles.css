@@ -148,6 +148,8 @@ html[lang='es'] .lang .lang-es { display: inline; }
 .dl-text { display: flex; flex-direction: column; text-align: left; }
 .dl-os { font-weight: 600; font-size: 15px; }
 .dl-sub { font-size: 12px; opacity: 0.75; }
+.dl.web { border-style: dashed; }
+.dl.web:hover { border-style: solid; }
 .dl-note { margin-top: 14px; font-size: 13.5px; color: var(--muted); }
 
 .hero-art {
