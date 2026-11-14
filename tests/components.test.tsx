@@ -334,6 +334,40 @@ describe('ProgressCard', () => {
     );
     expect(screen.queryByText(/Recording 1 of 1/)).toBeNull();
   });
+
+  it('can collapse back to the compact bar while the run continues', () => {
+    const onMinimize = vi.fn();
+    render(
+      <ProgressCard
+        progress={progress()}
+        elapsed={30}
+        error={null}
+        sourceName="take.wav"
+        onCancel={() => {}}
+        onMinimize={onMinimize}
+        onRetry={() => {}}
+        onDismiss={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Continue in the background' }));
+    expect(onMinimize).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no minimise button on the failure card', () => {
+    render(
+      <ProgressCard
+        progress={progress({ stage: 'error' })}
+        elapsed={30}
+        error="Whisper crashed"
+        sourceName="take.wav"
+        onCancel={() => {}}
+        onMinimize={() => {}}
+        onRetry={() => {}}
+        onDismiss={() => {}}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Continue in the background' })).toBeNull();
+  });
 });
 
 /* ----------------------------------------------------------- TranscriptView */

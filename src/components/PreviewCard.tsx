@@ -13,6 +13,8 @@ interface Props {
   enhanced?: boolean;
   /** Extra recordings waiting behind this one. */
   queued?: number;
+  /** Another transcription is running, so the button adds to its queue. */
+  queueing?: boolean;
   onStart: () => void;
   onOpenSettings: () => void;
   onRepair?: () => void;
@@ -39,6 +41,7 @@ export const PreviewCard: React.FC<Props> = ({
   busy = false,
   enhanced = false,
   queued = 0,
+  queueing = false,
   onStart,
   onOpenSettings,
   onRepair,
@@ -148,7 +151,7 @@ export const PreviewCard: React.FC<Props> = ({
         )}
         <button className="btn btn-primary" onClick={onStart} disabled={busy}>
           {busy ? <Loader2 size={16} className="spin" /> : null}
-          {t('preview.start')}
+          {queueing ? t('preview.queue') : t('preview.start')}
         </button>
       </div>
       <button className="preview-cancel-link" onClick={onCancel} disabled={busy}>

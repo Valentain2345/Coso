@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, Check, Loader2, RotateCcw, X } from 'lucide-react';
+import { AlertCircle, Check, Loader2, Minimize2, RotateCcw, X } from 'lucide-react';
 import type { ProgressUpdate } from '../types';
 import { useI18n, type TKey } from '../i18n';
 import { localizeProgress } from '../i18n/progress';
@@ -13,6 +13,8 @@ interface Props {
   batchIndex?: number;
   batchTotal?: number;
   onCancel: () => void;
+  /** Collapse to the compact bar and keep working while the run continues. */
+  onMinimize?: () => void;
   onRetry: () => void;
   onDismiss: () => void;
 }
@@ -48,6 +50,7 @@ export const ProgressCard: React.FC<Props> = ({
   batchIndex,
   batchTotal,
   onCancel,
+  onMinimize,
   onRetry,
   onDismiss,
 }) => {
@@ -122,6 +125,16 @@ export const ProgressCard: React.FC<Props> = ({
           </p>
         </div>
         <span className="progress-percent">{Math.round(overall)}%</span>
+        {onMinimize && (
+          <button
+            className="icon-btn progress-minimize"
+            onClick={onMinimize}
+            aria-label={t('progress.minimize')}
+            title={t('progress.minimize')}
+          >
+            <Minimize2 size={15} />
+          </button>
+        )}
       </div>
 
       <div className="progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(overall)}>

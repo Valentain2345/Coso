@@ -9,6 +9,7 @@
     "core:default",
     "dialog:default",
     "fs:allow-write-file",
-    "fs:default"
+    "fs:default",
+    "notification:default"
   ]
 }

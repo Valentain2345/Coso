@@ -1,6 +1,6 @@
 [package]
 name = "coso"
-version = "2.2.0"
+version = "2.3.0"
 description = "On-device lecture transcription with Whisper"
 authors = ["Coso"]
 license = "ISC"
@@ -25,3 +25,4 @@ tauri = { version = "2.12.5", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2.7.3"
 tauri-plugin-fs = "2.5.2"
+tauri-plugin-notification = "2"

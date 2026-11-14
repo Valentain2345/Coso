@@ -2472,11 +2472,12 @@ p {
   color: var(--faint);
 }
 
-/* Compact status shown when the user browses while a batch keeps running. */
+/* Compact status shown while the queue runs and the user keeps working. */
 .background-job {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px 10px;
   margin-bottom: 14px;
   padding: 10px 14px;
   border: 1px solid var(--line);
@@ -2486,20 +2487,52 @@ p {
   color: var(--ink-2);
 }
 
+.background-job > svg {
+  flex: none;
+}
+
 .background-job-text {
+  min-width: 0;
   font-weight: 500;
 }
 
 .background-job-name {
-  max-width: 36ch;
+  max-width: 30ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--muted);
 }
 
-.background-job .btn {
+.background-job-queue {
+  padding: 1px 8px;
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.background-job-percent {
   margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.background-job-toggle {
+  margin-left: auto;
+}
+
+.background-job-percent + .background-job-toggle {
+  margin-left: 0;
+}
+
+.progress-minimize {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  color: var(--muted);
 }
 
 .preview-actions {
@@ -3353,6 +3386,16 @@ p {
 }
 
 @media (max-width: 620px) {
+  .background-job-name {
+    max-width: 100%;
+    flex-basis: 100%;
+    order: 3;
+  }
+
+  .background-job-toggle-text {
+    display: none;
+  }
+
   .content {
     padding-top: 22px;
     padding-bottom: 64px;

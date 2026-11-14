@@ -101,6 +101,20 @@ describe('PreviewCard', () => {
     expect(view.container.querySelector('.preview-queue')).toBeNull();
   });
 
+  it('offers to join the running queue instead of starting another run', () => {
+    render(
+      <PreviewCard
+        source={source()}
+        queueing
+        onStart={() => {}}
+        onOpenSettings={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Add to queue' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Transcribe all' })).toBeNull();
+  });
+
   it('replays from the very beginning', () => {
     const play = vi.fn(() => Promise.resolve());
     const pause = vi.fn();

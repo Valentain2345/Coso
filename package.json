@@ -1,6 +1,6 @@
 {
   "name": "coso-audio",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "private": true,
   "description": "On-device lecture transcription with Whisper. Record, transcribe, edit, and export - all in the browser.",
   "type": "module",
@@ -26,6 +26,7 @@
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-dialog": "^2.8.4",
     "@tauri-apps/plugin-fs": "^2.7.1",
+    "@tauri-apps/plugin-notification": "^2.8.1",
     "docx": "^9.15.2",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.69.0",

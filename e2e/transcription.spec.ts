@@ -24,10 +24,22 @@ test('imports audio, transcribes on-device, and downloads the recording', async 
   await expect(page.locator('.preview-card')).toBeVisible({ timeout: 30_000 });
   await page.getByRole('button', { name: 'Transcribe all' }).click();
 
+  // The run continues in the background: the start screen stays usable so the
+  // next lecture can be recorded or imported while this one is transcribed.
+  await expect(page.locator('.background-job')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('button', { name: /Start recording/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Import audio' })).toBeVisible();
+
+  // The full step-by-step card is one click away and collapses back.
+  await page.getByRole('button', { name: 'Show transcription details' }).click();
+  await expect(page.locator('.progress-card')).toBeVisible();
+  await page.getByRole('button', { name: 'Continue in the background' }).click();
+  await expect(page.locator('.background-job')).toBeVisible();
+
   // The first run downloads Whisper Base and the denoiser, then transcribes.
-  await expect(page.locator('.progress-card')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('.transcript-card')).toBeVisible({ timeout: 12 * 60_000 });
   await expect(page.locator('.progress-card')).toHaveCount(0);
+  await expect(page.locator('.background-job')).toHaveCount(0);
 
   const firstPassage = page.locator('.segment-text').first();
   await expect(firstPassage).not.toHaveText('');

@@ -89,22 +89,31 @@ from the real running app by `tools/manual-media.mjs`:
 node tools/manual-media.mjs   # writes public/manual/*.png and *.gif
 ```
 
-## Sharing, batches and long recordings
+## Sharing, background queues and long recordings
 
 - **Share** (next to Copy in the transcript header) uses the system share sheet
   with the transcript as a `.txt` file when the platform supports files (Android,
   mobile browsers), falls back to sharing plain text, and finally to the
   clipboard. Dismissing the sheet is treated as a cancel, never as an error.
-- **Batch import.** Choose or drop several recordings at once. The first one is
-  previewed so the repair preset can be checked; **Transcribe all** then runs the
-  rest one after another. Progress shows "Recording 2 of 4", each transcript is
-  saved before the next file starts, and one bad file does not stop the batch.
-  Processing is sequential on purpose: the Whisper model and the WASM/WebGPU
-  context are shared, so parallel files would double memory without finishing
-  sooner.
-- **Background work.** Opening another transcript no longer cancels a run. A
-  compact status bar shows the active file and percentage while the user reads,
-  and new batch results are saved without stealing focus.
+- **Background queue.** Recording and transcription are independent. Start a
+  run, then go back and record the next lecture, drop another file, or read an
+  older transcript while the first one is still being transcribed. New work is
+  appended to the running queue instead of being refused: the header reads
+  "Add to queue" and the compact status bar shows "2 queued". The queue drains
+  one item at a time because the Whisper model and the WASM/WebGPU context are
+  shared, so parallel items would double memory without finishing sooner
+  (`src/lib/jobQueue.ts`).
+- **Unobtrusive progress.** While the queue runs, the workspace stays usable and
+  a compact bar shows the active recording, its percentage and how many items are
+  waiting. "Details" expands the full step-by-step card, and the card's minimize
+  button collapses it again. A failure opens the full card so the checkpoint can
+  be resumed; cancel stops the item in flight and drops the waiting work.
+- **Completion notification.** When a run ends while the app is in the
+  background, Coso sends a system notification - the Tauri notification plugin
+  on Windows and Android, the Web Notifications API in a browser - with the
+  transcript title (or "3 of 4 saved" for a queue). Permission is requested once,
+  from the button that starts the run, and nothing is sent while the window is
+  visible and focused because the in-app toast already says it.
 - **Longer previews.** Sources of two minutes or more get a 20 second preview
   window (`src/lib/preview.ts`); shorter notes keep 5 seconds.
 
@@ -134,8 +143,8 @@ npm run desktop        # development window
 npm run desktop:build  # installers in src-tauri/target/release/bundle
 ```
 
-The build writes `bundle/nsis/Coso_2.2.0_x64-setup.exe` and
-`bundle/msi/Coso_2.2.0_x64_en-US.msi`; either installs the app. On launch the
+The build writes `bundle/nsis/Coso_<version>_x64-setup.exe` and
+`bundle/msi/Coso_<version>_x64_en-US.msi`; either installs the app. On launch the
 window shrinks to fit small laptop screens and centres itself. The NSIS
 installer creates a **Coso** shortcut on the desktop in addition to the
 Start-menu entry (see `src-tauri/nsis-hooks.nsh`), shows in the user's language
@@ -289,9 +298,17 @@ Coverage:
   counted, cancel, localized permission error, unsupported browser.
 - `tests/components.test.tsx` - CapturePanel (including multi-file import),
   SettingsDialog (including the language switch and in-place warning reveals),
-  ProgressCard (including batch position).
-- `tests/batch.test.ts` - sequential batch order, continuing after a failed
-  file, cancellation between files and empty queues.
+  ProgressCard (including batch position, minimise and the failure card).
+- `tests/jobQueue.test.ts` - sequential queue order, positions and totals,
+  recordings appended mid-run, continuing after a failure, cancellation between
+  items and reuse after reset.
+- `tests/notify.test.ts` - permission prompts per platform, foreground
+  suppression, native-vs-web preference and unsupported environments.
+- `tests/backgroundJob.test.tsx` - the compact bar: batch position, queued
+  count, percentage, details toggle, cancel and localization.
+- `tests/progressView.test.ts` - when the full card may replace the workspace:
+  never over a recording or a queue that still has work, always on an explicit
+  expand.
 - `tests/share.test.ts` - share-sheet file/text payloads, clipboard fallback,
   dismissed sheets and blocked APIs.
 - `tests/modelCache.test.ts` - OPFS model cache: hashed names, streaming with
