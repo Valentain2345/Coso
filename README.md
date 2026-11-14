@@ -1,7 +1,12 @@
 # Coso download page
 
-Static landing page for downloading the Coso apps. Hosted on **GitHub Pages** —
+Static landing page for downloading the Coso apps. Hosted on **GitHub Pages** -
 no build step, no framework: plain `index.html` + `styles.css` + `app.js`.
+
+The **web app** lives in `app/` and is generated, not edited by hand. Rebuild it
+from the app repository with `pwsh -File tools/publish-web.ps1 -Commit`; that
+builds with base `/Coso/app/`, copies `dist/` here and pushes `gh-pages`. The
+hero links to it as "Web app" → `app/`.
 
 ## Before publishing (one edit)
 
