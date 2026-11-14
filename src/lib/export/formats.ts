@@ -87,7 +87,8 @@ function effectiveSpeakerCount(session: Session): number {
   );
 }
 
-function displayTitle(session: Session, lang: Lang): string {
+/** Human title for exports and share sheets; falls back to a localised label. */
+export function displayTitle(session: Session, lang: Lang): string {
   const title = normalizeText(session.title ?? '');
   return title.length > 0 ? title : translate(lang, 'export.untitled');
 }

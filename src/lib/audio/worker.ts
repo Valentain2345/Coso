@@ -2,6 +2,7 @@ import { AutoModel, AutoModelForAudioFrameClassification, AutoProcessor, env } f
 import type { DenoiseQuality, DiarWindow, Stage } from '../../types';
 import { highPass, detectSpeechSegments, StreamingResampler, spectralDenoise, type SpeechSegment } from './dsp';
 import { NeuralDenoiser } from './denoise';
+import { createOpfsModelCache } from './modelCache';
 import { decodePyannoteFrames } from './pyannote';
 
 interface ConfigureRequest {
@@ -50,7 +51,17 @@ const SPEAKER_MODEL = 'onnx-community/wespeaker-voxceleb-resnet34-LM';
 const PYANNOTE_MODEL = 'onnx-community/pyannote-segmentation-3.0';
 
 env.allowLocalModels = false;
-env.useBrowserCache = true;
+// Keep model weights as files in the origin's private filesystem instead of
+// Cache API entries: startup never touches them, and a large model cannot
+// bloat the storage the interface reads when it opens.
+const modelCache = createOpfsModelCache();
+if (modelCache) {
+  env.useBrowserCache = false;
+  env.useCustomCache = true;
+  env.customCache = modelCache;
+} else {
+  env.useBrowserCache = true;
+}
 const wasmBackend = env.backends?.onnx?.wasm;
 if (wasmBackend) {
   wasmBackend.numThreads = scope.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 4) : 1;

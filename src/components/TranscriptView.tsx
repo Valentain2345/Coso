@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Copy, Pencil, Play, RotateCcw, Search, X } from 'lucide-react';
+import { Check, Copy, Pencil, Play, RotateCcw, Search, Share2, X } from 'lucide-react';
 import type { Session, TranscriptSegment } from '../types';
 import type { usePlayer } from '../hooks/usePlayer';
 import { useI18n } from '../i18n';
 import { speakerColor, timestamp } from './ui/primitives';
 import { parseClock } from '../lib/export/formats';
+import { shareTranscript } from '../lib/share';
 import type { ToastTone } from './Toast';
 
 interface Props {
@@ -55,7 +56,7 @@ function segmentLine(speakerLabel: string, segment: TranscriptSegment): string {
 }
 
 export const TranscriptView: React.FC<Props> = ({ session, player, onEditSegment, onEditSegmentStart, onRenameSpeaker, onReprocess, onToast }) => {
-  const { t } = useI18n();
+  const { lang, t } = useI18n();
   const [query, setQuery] = useState('');
   const [speaker, setSpeaker] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
@@ -136,6 +137,24 @@ export const TranscriptView: React.FC<Props> = ({ session, player, onEditSegment
     window.setTimeout(() => setCopied(false), 2000);
   };
 
+  const share = async () => {
+    const outcome = await shareTranscript(session, lang);
+    if (outcome === 'shared') {
+      onToast(t('transcript.share.ok.title'), 'success', t('transcript.share.ok.desc'));
+      return;
+    }
+    if (outcome === 'copied') {
+      setCopied(true);
+      onToast(t('transcript.share.copied.title'), 'success', t('transcript.share.copied.desc'));
+      window.setTimeout(() => setCopied(false), 2000);
+      return;
+    }
+    if (outcome === 'failed') {
+      onToast(t('transcript.share.fail.title'), 'error', t('transcript.share.fail.desc'));
+    }
+    // 'cancelled' is the user dismissing the share sheet: stay silent.
+  };
+
   const commitEdit = (segment: TranscriptSegment, element: HTMLElement) => {
     const next = (element.textContent ?? '').replace(/\s+/g, ' ').trim();
     if (!next) {
@@ -210,6 +229,15 @@ export const TranscriptView: React.FC<Props> = ({ session, player, onEditSegment
           <button className="btn btn-ghost btn-small" onClick={() => void copy()}>
             {copied ? <Check size={15} /> : <Copy size={15} />}
             {copied ? t('common.copied') : t('common.copy')}
+          </button>
+
+          <button
+            className="btn btn-ghost btn-small"
+            onClick={() => void share()}
+            title={t('transcript.share.label')}
+          >
+            <Share2 size={15} />
+            {t('transcript.share.label')}
           </button>
 
           <button

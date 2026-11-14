@@ -14,6 +14,22 @@ npm run test:e2e   # Playwright end-to-end tests
 npm run build      # production build in dist/
 ```
 
+### Publish the web app to GitHub Pages
+
+The download page (branch `gh-pages`) hosts the app at
+`https://valentain2345.github.io/Coso/app/`:
+
+```powershell
+pwsh -File tools/publish-web.ps1          # build with base /Coso/app/ and copy
+pwsh -File tools/publish-web.ps1 -Commit  # ... and push the gh-pages branch
+```
+
+`vite.config.ts` rewrites `manifest.webmanifest` for the sub-path, and
+`public/sw.js` derives its cache URLs from the service-worker registration
+scope, so the same build works at the root, under `/Coso/app/`, and inside
+Tauri. Add `https://valentain2345.github.io` as an authorized JavaScript
+origin if Drive should work in the web build.
+
 ## Google Drive: one-time setup
 
 Google does **not** allow an app to collect a Google email and password
@@ -73,6 +89,38 @@ from the real running app by `tools/manual-media.mjs`:
 node tools/manual-media.mjs   # writes public/manual/*.png and *.gif
 ```
 
+## Sharing, batches and long recordings
+
+- **Share** (next to Copy in the transcript header) uses the system share sheet
+  with the transcript as a `.txt` file when the platform supports files (Android,
+  mobile browsers), falls back to sharing plain text, and finally to the
+  clipboard. Dismissing the sheet is treated as a cancel, never as an error.
+- **Batch import.** Choose or drop several recordings at once. The first one is
+  previewed so the repair preset can be checked; **Transcribe all** then runs the
+  rest one after another. Progress shows "Recording 2 of 4", each transcript is
+  saved before the next file starts, and one bad file does not stop the batch.
+  Processing is sequential on purpose: the Whisper model and the WASM/WebGPU
+  context are shared, so parallel files would double memory without finishing
+  sooner.
+- **Background work.** Opening another transcript no longer cancels a run. A
+  compact status bar shows the active file and percentage while the user reads,
+  and new batch results are saved without stealing focus.
+- **Longer previews.** Sources of two minutes or more get a 20 second preview
+  window (`src/lib/preview.ts`); shorter notes keep 5 seconds.
+
+## Storage
+
+Opening the app should not depend on how much audio the library holds:
+
+- Sessions store a lightweight metadata mirror (`sessionMeta`, DB v3). The
+  startup list reads only that store; full sessions - audio blobs and transcript
+  segments - load when one is opened. Upgrading from v2 backfills the mirror.
+- Whisper weights are written as files in the Origin Private File System
+  (`coso-models`) instead of Cache API entries. A 1 GB model therefore never
+  enters the storage the interface reads at startup, and it survives cache
+  eviction. `src/lib/audio/modelCache.ts` streams downloads and falls back to
+  the browser Cache API in environments without OPFS.
+
 ## Windows app (Tauri)
 
 Prerequisites, all free:
@@ -86,8 +134,8 @@ npm run desktop        # development window
 npm run desktop:build  # installers in src-tauri/target/release/bundle
 ```
 
-The build writes `bundle/nsis/Coso_2.1.0_x64-setup.exe` and
-`bundle/msi/Coso_2.1.0_x64_en-US.msi`; either installs the app. On launch the
+The build writes `bundle/nsis/Coso_2.2.0_x64-setup.exe` and
+`bundle/msi/Coso_2.2.0_x64_en-US.msi`; either installs the app. On launch the
 window shrinks to fit small laptop screens and centres itself. The NSIS
 installer creates a **Coso** shortcut on the desktop in addition to the
 Start-menu entry (see `src-tauri/nsis-hooks.nsh`), shows in the user's language
@@ -239,8 +287,19 @@ Coverage:
   aggregation, errors, preload, abort/terminate.
 - `tests/useRecorder.test.tsx` — recorder lifecycle: start/stop, pause not
   counted, cancel, localized permission error, unsupported browser.
-- `tests/components.test.tsx` — CapturePanel, SettingsDialog (including the
-  language switch and in-place warning reveals), ProgressCard.
+- `tests/components.test.tsx` - CapturePanel (including multi-file import),
+  SettingsDialog (including the language switch and in-place warning reveals),
+  ProgressCard (including batch position).
+- `tests/batch.test.ts` - sequential batch order, continuing after a failed
+  file, cancellation between files and empty queues.
+- `tests/share.test.ts` - share-sheet file/text payloads, clipboard fallback,
+  dismissed sheets and blocked APIs.
+- `tests/modelCache.test.ts` - OPFS model cache: hashed names, streaming with
+  progress, misses, deletion and the no-OPFS fallback.
+- `tests/db.test.ts` - sessions, settings, jobs, the v3 metadata mirror
+  (listing without heavy records) and the v2 upgrade backfill.
+- `tests/basePath.test.ts` - sub-path URLs and web manifest rewriting for the
+  GitHub Pages deployment.
 - `tests/enhance.test.ts` — repair DSP primitives (EQ, compressor, levelling,
   limiter), preset monotonicity, and an SNR improvement check on real speech.
 - `tests/repair.test.tsx` — repair dialog decode, preset selection, WAV output,
@@ -259,4 +318,5 @@ Coverage:
 
 Audio and transcripts stay in this browser/app (IndexedDB). Nothing is uploaded
 unless the user presses Upload in the Google Drive dialog. Model weights are
-downloaded from Hugging Face the first time and then cached.
+downloaded from Hugging Face the first time and then kept in the app's private
+OPFS directory, where the interface does not read them at startup.

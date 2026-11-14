@@ -28,7 +28,8 @@ interface Props {
   onResume: () => void;
   onStop: () => void;
   onCancel: () => void;
-  onFile: (file: File) => void;
+  /** Import one or more recordings; the app queues everything after the first. */
+  onFiles: (files: File[]) => void;
   onOpen: (id: string) => void;
   job?: JobState | null;
   onResumeJob?: (job: JobState) => void;
@@ -49,7 +50,7 @@ export const CapturePanel: React.FC<Props> = ({
   onResume,
   onStop,
   onCancel,
-  onFile,
+  onFiles,
   onOpen,
   job,
   onResumeJob,
@@ -64,9 +65,10 @@ export const CapturePanel: React.FC<Props> = ({
 
   const chooseFile = () => inputRef.current?.click();
 
-  const pick = (file: File | undefined | null) => {
-    if (!file) return;
-    onFile(file);
+  const pick = (files: FileList | File[] | null | undefined) => {
+    const list = files ? Array.from(files) : [];
+    if (list.length === 0) return;
+    onFiles(list);
     if (inputRef.current) inputRef.current.value = '';
   };
 
@@ -205,8 +207,9 @@ export const CapturePanel: React.FC<Props> = ({
               ref={inputRef}
               type="file"
               accept="audio/*,.wav,.mp3,.m4a,.ogg,.flac,.webm,.aac"
+              multiple
               hidden
-              onChange={(event) => pick(event.target.files?.[0])}
+              onChange={(event) => pick(event.target.files)}
             />
           </div>
 
@@ -220,7 +223,7 @@ export const CapturePanel: React.FC<Props> = ({
             onDrop={(event) => {
               event.preventDefault();
               setDragging(false);
-              pick(event.dataTransfer.files?.[0]);
+              pick(event.dataTransfer.files);
             }}
             onClick={chooseFile}
             onKeyDown={(event) => {

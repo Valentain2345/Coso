@@ -1,12 +1,23 @@
 /* Coso app-shell service worker.
- * Transcripts and audio live in IndexedDB, Whisper weights in the Cache API.
- * This worker only keeps the UI shell available offline.
+ * Transcripts and audio live in IndexedDB, Whisper weights in the OPFS model
+ * cache. This worker only keeps the UI shell available offline.
+ *
+ * Everything is resolved from the registration scope so the same build works
+ * at the domain root, inside Tauri, and under /Coso/app/ on GitHub Pages.
  */
-const VERSION = 'coso-shell-v1';
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
+const VERSION = 'coso-shell-v2';
+const SCOPE = new URL(self.registration.scope);
+const BASE = SCOPE.pathname.endsWith('/') ? SCOPE.pathname : `${SCOPE.pathname}/`;
+const SHELL = [BASE, `${BASE}index.html`, `${BASE}manifest.webmanifest`, `${BASE}icon.svg`];
+const INDEX = `${BASE}index.html`;
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(VERSION).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(
+    caches
+      .open(VERSION)
+      .then((cache) => cache.addAll(SHELL))
+      .then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener('activate', (event) => {
@@ -29,10 +40,10 @@ self.addEventListener('fetch', (event) => {
       fetch(request)
         .then((response) => {
           const copy = response.clone();
-          caches.open(VERSION).then((cache) => cache.put('/index.html', copy));
+          caches.open(VERSION).then((cache) => cache.put(INDEX, copy));
           return response;
         })
-        .catch(() => caches.match('/index.html').then((hit) => hit || Response.error())),
+        .catch(() => caches.match(INDEX).then((hit) => hit || Response.error())),
     );
     return;
   }

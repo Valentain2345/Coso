@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { PreviewCard, PREVIEW_SECONDS } from '../src/components/PreviewCard';
 import { QuickSettingsDialog } from '../src/components/QuickSettingsDialog';
+import { LONG_PREVIEW_SECONDS, previewSecondsFor } from '../src/lib/preview';
 import { setLang } from '../src/i18n';
 import type { Settings } from '../src/types';
 import type { TranscribeSource } from '../src/hooks/useTranscription';
@@ -41,6 +42,27 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/* ------------------------------------------------------------ preview length */
+
+describe('previewSecondsFor', () => {
+  it('uses 5 seconds until the duration is known', () => {
+    expect(previewSecondsFor(null)).toBe(PREVIEW_SECONDS);
+    expect(previewSecondsFor(undefined)).toBe(PREVIEW_SECONDS);
+    expect(previewSecondsFor(Number.NaN)).toBe(PREVIEW_SECONDS);
+  });
+
+  it('uses 5 seconds for short recordings', () => {
+    expect(previewSecondsFor(0)).toBe(PREVIEW_SECONDS);
+    expect(previewSecondsFor(30)).toBe(PREVIEW_SECONDS);
+    expect(previewSecondsFor(119.9)).toBe(PREVIEW_SECONDS);
+  });
+
+  it('uses 20 seconds for long recordings', () => {
+    expect(previewSecondsFor(120)).toBe(LONG_PREVIEW_SECONDS);
+    expect(previewSecondsFor(45 * 60)).toBe(LONG_PREVIEW_SECONDS);
+  });
+});
+
 /* --------------------------------------------------------------- PreviewCard */
 
 describe('PreviewCard', () => {
@@ -57,6 +79,26 @@ describe('PreviewCard', () => {
       <PreviewCard source={{ blob: new Blob(['x']), name: null }} onStart={() => {}} onOpenSettings={() => {}} onCancel={() => {}} />,
     );
     expect(screen.getByText(/Microphone recording/)).toBeTruthy();
+  });
+
+  it('announces the recordings queued behind this one', () => {
+    render(
+      <PreviewCard
+        source={source()}
+        queued={3}
+        onStart={() => {}}
+        onOpenSettings={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+    expect(screen.getByText('3 more queued after this one.')).toBeTruthy();
+  });
+
+  it('shows no queue note for a single recording', () => {
+    const view = render(
+      <PreviewCard source={source()} onStart={() => {}} onOpenSettings={() => {}} onCancel={() => {}} />,
+    );
+    expect(view.container.querySelector('.preview-queue')).toBeNull();
   });
 
   it('replays from the very beginning', () => {
@@ -97,6 +139,22 @@ describe('PreviewCard', () => {
     expect(pause).not.toHaveBeenCalled();
     const fill = document.querySelector('.preview-meter-fill') as HTMLElement;
     expect(fill.style.width).toBe('60%');
+  });
+
+  it('gives long recordings a 20 second window', () => {
+    const pause = vi.fn();
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(pause);
+    render(<PreviewCard source={source()} onStart={() => {}} onOpenSettings={() => {}} onCancel={() => {}} />);
+    const audio = document.querySelector('audio') as HTMLAudioElement;
+    Object.defineProperty(audio, 'duration', { value: 60 * 45, configurable: true });
+    fireEvent(audio, new Event('loadedmetadata'));
+
+    expect(screen.getByText(/first 20 seconds/i)).toBeTruthy();
+
+    audio.currentTime = 25;
+    fireEvent(audio, new Event('timeupdate'));
+    expect(pause).toHaveBeenCalled();
+    expect(audio.currentTime).toBe(LONG_PREVIEW_SECONDS);
   });
 
   it('starts the transcription and discards on cancel', () => {

@@ -23,7 +23,7 @@ test.describe('app language', () => {
     await expect(dialog).toHaveCount(0);
     await page.reload();
     await expect(page.getByRole('button', { name: /Empezar a grabar/ })).toBeVisible();
-    await expect(page.getByText(/Suelta un archivo de audio/)).toBeVisible();
+    await expect(page.getByText(/Suelta archivos de audio/)).toBeVisible();
 
     // Library surfaces flip too: open Settings again and switch back.
     await page.locator('.topbar button[aria-label="Ajustes"]').click();

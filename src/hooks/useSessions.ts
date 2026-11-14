@@ -83,9 +83,12 @@ export function useSessions() {
   );
 
   const add = useCallback(
-    async (session: Session) => {
-      cancelPendingSave();
-      setCurrent(session);
+    async (session: Session, options?: { activate?: boolean }) => {
+      const activate = options?.activate ?? true;
+      if (activate) {
+        cancelPendingSave();
+        setCurrent(session);
+      }
       try {
         await saveSession(session);
         await refresh();

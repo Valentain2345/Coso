@@ -6,6 +6,21 @@ test.describe('start screen', () => {
     await expect(page.getByRole('heading', { name: /Record a lecture/ })).toBeVisible();
   });
 
+  test('queues several imported files behind the first preview', async ({ page }) => {
+    await page.locator('input[type="file"]').setInputFiles([
+      { name: 'lecture-01.wav', mimeType: 'audio/wav', buffer: Buffer.from('RIFF') },
+      { name: 'lecture-02.wav', mimeType: 'audio/wav', buffer: Buffer.from('RIFF') },
+      { name: 'lecture-03.wav', mimeType: 'audio/wav', buffer: Buffer.from('RIFF') },
+    ]);
+
+    await expect(page.getByRole('heading', { name: 'Listen before transcribing' })).toBeVisible();
+    await expect(page.getByText('2 more queued after this one.')).toBeVisible();
+    await expect(page.getByText('lecture-01.wav')).toBeVisible();
+
+    await page.getByRole('button', { name: /Discard recording/ }).click();
+    await expect(page.getByRole('heading', { name: /Record a lecture/ })).toBeVisible();
+  });
+
   test('keeps the default start screen free of warnings', async ({ page }) => {
     await expect(page.locator('.capture-warning')).toHaveCount(0);
   });

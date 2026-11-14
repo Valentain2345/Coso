@@ -73,16 +73,16 @@ afterEach(() => {
 
 describe('CapturePanel', () => {
   it('shows the record button and import area when idle', () => {
-    render(<CapturePanel recorder={recorderMock()} sessions={[]} onStart={() => {}} onPause={() => {}} onResume={() => {}} onStop={() => {}} onCancel={() => {}} onFile={() => {}} onOpen={() => {}} />);
+    render(<CapturePanel recorder={recorderMock()} sessions={[]} onStart={() => {}} onPause={() => {}} onResume={() => {}} onStop={() => {}} onCancel={() => {}} onFiles={() => {}} onOpen={() => {}} />);
     expect(screen.getByRole('button', { name: /Start recording/i })).toBeTruthy();
     expect(screen.getByText('Import audio')).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Drop an audio file/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Drop audio files/i })).toBeTruthy();
   });
 
   it('lists recent sessions with localized counts and opens them', () => {
     const onOpen = vi.fn();
     render(
-      <CapturePanel recorder={recorderMock()} sessions={[sessionMeta()]} onStart={() => {}} onPause={() => {}} onResume={() => {}} onStop={() => {}} onCancel={() => {}} onFile={() => {}} onOpen={onOpen} />,
+      <CapturePanel recorder={recorderMock()} sessions={[sessionMeta()]} onStart={() => {}} onPause={() => {}} onResume={() => {}} onStop={() => {}} onCancel={() => {}} onFiles={() => {}} onOpen={onOpen} />,
     );
     fireEvent.click(screen.getByText('Biology lecture'));
     expect(onOpen).toHaveBeenCalledWith('s1');
@@ -90,15 +90,34 @@ describe('CapturePanel', () => {
     expect(screen.getByText(/1,250 words/)).toBeTruthy();
   });
 
-  it('passes the chosen file upward through both the picker and the drop zone', async () => {
-    const onFile = vi.fn();
+  it('passes every chosen file upward through the picker, not just the first', async () => {
+    const onFiles = vi.fn();
     const view = render(
-      <CapturePanel recorder={recorderMock()} sessions={[]} onStart={() => {}} onPause={() => {}} onResume={() => {}} onStop={() => {}} onCancel={() => {}} onFile={onFile} onOpen={() => {}} />,
+      <CapturePanel recorder={recorderMock()} sessions={[]} onStart={() => {}} onPause={() => {}} onResume={() => {}} onStop={() => {}} onCancel={() => {}} onFiles={onFiles} onOpen={() => {}} />,
     );
     const input = view.container.querySelector('input[type="file"]') as HTMLInputElement;
     expect(input).toBeTruthy();
-    await fireEvent.change(input, { target: { files: [new File(['x'], 'take.wav')] } });
-    expect(onFile).toHaveBeenCalledOnce();
+    expect(input.multiple).toBe(true);
+
+    const files = [new File(['x'], 'take.wav'), new File(['y'], 'lecture.mp3')];
+    await fireEvent.change(input, { target: { files } });
+
+    expect(onFiles).toHaveBeenCalledOnce();
+    expect(onFiles.mock.calls[0][0]).toHaveLength(2);
+    expect(onFiles.mock.calls[0][0].map((file: File) => file.name)).toEqual(['take.wav', 'lecture.mp3']);
+    // The input is reset so choosing the same files again still fires.
+    expect(input.value).toBe('');
+  });
+
+  it('passes multiple dropped files upward', () => {
+    const onFiles = vi.fn();
+    render(<CapturePanel recorder={recorderMock()} sessions={[]} onStart={() => {}} onPause={() => {}} onResume={() => {}} onStop={() => {}} onCancel={() => {}} onFiles={onFiles} onOpen={() => {}} />);
+    const zone = screen.getByRole('button', { name: /Drop audio files/i });
+    fireEvent.drop(zone, {
+      dataTransfer: { files: [new File(['a'], 'one.m4a'), new File(['b'], 'two.m4a')] },
+    });
+    expect(onFiles).toHaveBeenCalledOnce();
+    expect(onFiles.mock.calls[0][0]).toHaveLength(2);
   });
 
   it('shows the recording card with pause and stop while recording', () => {
@@ -111,7 +130,7 @@ describe('CapturePanel', () => {
         onResume={() => {}}
         onStop={() => {}}
         onCancel={() => {}}
-        onFile={() => {}}
+        onFiles={() => {}}
         onOpen={() => {}}
       />,
     );
@@ -130,7 +149,7 @@ describe('CapturePanel', () => {
         onResume={() => {}}
         onStop={() => {}}
         onCancel={() => {}}
-        onFile={() => {}}
+        onFiles={() => {}}
         onOpen={() => {}}
         job={{
           id: 'j1',
@@ -159,7 +178,7 @@ describe('CapturePanel', () => {
 
   it('renders in Spanish when the language is set to es', () => {
     setLang('es');
-    render(<CapturePanel recorder={recorderMock()} sessions={[sessionMeta()]} onStart={() => {}} onPause={() => {}} onResume={() => {}} onStop={() => {}} onCancel={() => {}} onFile={() => {}} onOpen={() => {}} />);
+    render(<CapturePanel recorder={recorderMock()} sessions={[sessionMeta()]} onStart={() => {}} onPause={() => {}} onResume={() => {}} onStop={() => {}} onCancel={() => {}} onFiles={() => {}} onOpen={() => {}} />);
     expect(screen.getByRole('button', { name: /Empezar a grabar/i })).toBeTruthy();
     expect(screen.getByText('1 guardada')).toBeTruthy();
     expect(screen.getByText(/1250 palabras/)).toBeTruthy();
@@ -279,6 +298,41 @@ describe('ProgressCard', () => {
     const view = render(<ProgressCard progress={progress({ stage: 'done', progress: 1 })} elapsed={300} error={null} sourceName={null} onCancel={() => {}} onRetry={() => {}} onDismiss={() => {}} />);
     const stages = view.container.querySelectorAll('.stage');
     expect(stages[4].className).toContain('done');
+  });
+
+  it('shows the position inside a multi-file batch', () => {
+    render(
+      <ProgressCard
+        progress={progress()}
+        elapsed={30}
+        error={null}
+        sourceName="lecture-02.mp3"
+        batchIndex={2}
+        batchTotal={4}
+        onCancel={() => {}}
+        onRetry={() => {}}
+        onDismiss={() => {}}
+      />,
+    );
+    expect(screen.getByText('Recording 2 of 4')).toBeTruthy();
+    expect(screen.getByText('lecture-02.mp3')).toBeTruthy();
+  });
+
+  it('hides the batch counter for a single recording', () => {
+    render(
+      <ProgressCard
+        progress={progress()}
+        elapsed={30}
+        error={null}
+        sourceName="take.wav"
+        batchIndex={1}
+        batchTotal={1}
+        onCancel={() => {}}
+        onRetry={() => {}}
+        onDismiss={() => {}}
+      />,
+    );
+    expect(screen.queryByText(/Recording 1 of 1/)).toBeNull();
   });
 });
 

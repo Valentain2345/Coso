@@ -1,9 +1,12 @@
 import type { JobRecord, JobState, Session, SessionMeta, Settings } from '../types';
 
 export const DB_NAME = 'coso-audio';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 const SESSION_STORE = 'sessions';
+// Lightweight mirror of every session: startup lists this store so opening the
+// app never deserialises audio blobs or transcript segments.
+const SESSION_META_STORE = 'sessionMeta';
 const SETTINGS_STORE = 'settings';
 const JOB_STORE = 'jobs';
 const JOB_AUDIO_STORE = 'jobAudio';
@@ -50,9 +53,10 @@ export function openDatabase(): Promise<IDBDatabase> {
       return;
     }
 
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       try {
         const db = request.result;
+        const previousVersion = event.oldVersion ?? 0;
         const tx = request.transaction;
 
         let sessions: IDBObjectStore;
@@ -66,6 +70,26 @@ export function openDatabase(): Promise<IDBDatabase> {
 
         if (!sessions.indexNames.contains('createdAt')) {
           sessions.createIndex('createdAt', 'createdAt', { unique: false });
+        }
+
+        let metas: IDBObjectStore;
+        if (!db.objectStoreNames.contains(SESSION_META_STORE)) {
+          metas = db.createObjectStore(SESSION_META_STORE, { keyPath: 'id' });
+        } else if (tx) {
+          metas = tx.objectStore(SESSION_META_STORE);
+        } else {
+          throw new Error('Missing transaction while upgrading sessionMeta store');
+        }
+
+        // v2 stored everything in one record. Backfill the lightweight mirror
+        // while the upgrade transaction is still open.
+        if (previousVersion < 3) {
+          sessions.openCursor().onsuccess = (event) => {
+            const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
+            if (!cursor) return;
+            metas.put(toSessionMeta(cursor.value as Session));
+            cursor.continue();
+          };
         }
 
         if (!db.objectStoreNames.contains(SETTINGS_STORE)) {
@@ -186,9 +210,9 @@ function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
  * rejects if the transaction errors or aborts.
  */
 function runTransaction<T>(
-  storeName: string,
+  storeName: string | string[],
   mode: IDBTransactionMode,
-  run: (store: IDBObjectStore) => T | Promise<T>,
+  run: (store: IDBObjectStore, tx: IDBTransaction) => T | Promise<T>,
 ): Promise<T> {
   return openDatabase().then(
     (db) =>
@@ -205,7 +229,8 @@ function runTransaction<T>(
         let outcome: T | Promise<T>;
 
         try {
-          outcome = run(tx.objectStore(storeName));
+          const primary = Array.isArray(storeName) ? storeName[0] : storeName;
+          outcome = run(tx.objectStore(primary), tx);
         } catch (error) {
           try {
             tx.abort();
@@ -252,16 +277,35 @@ function toSessionMeta(session: Session): SessionMeta {
 
 /** List session metadata, newest first. Heavy fields are stripped. */
 export async function listSessions(): Promise<SessionMeta[]> {
+  const metas = await runTransaction<SessionMeta[]>(
+    SESSION_META_STORE,
+    'readonly',
+    (store) => requestToPromise(store.getAll() as IDBRequest<SessionMeta[]>),
+  );
+
+  // Safety net for a database whose meta mirror is missing (for example an
+  // upgrade interrupted before the backfill): rebuild it from the full store.
+  if (metas.length === 0) {
+    return rebuildSessionMeta();
+  }
+
+  return metas.slice().sort((a, b) => b.createdAt - a.createdAt);
+}
+
+async function rebuildSessionMeta(): Promise<SessionMeta[]> {
   const sessions = await runTransaction<Session[]>(
     SESSION_STORE,
     'readonly',
     (store) => requestToPromise(store.getAll() as IDBRequest<Session[]>),
   );
-
-  return sessions
-    .slice()
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .map(toSessionMeta);
+  const metas = sessions.map(toSessionMeta);
+  if (metas.length > 0) {
+    await runTransaction(SESSION_META_STORE, 'readwrite', (store) => {
+      for (const meta of metas) store.put(meta);
+      return undefined;
+    });
+  }
+  return metas.sort((a, b) => b.createdAt - a.createdAt);
 }
 
 /** Fetch a complete session, including audio and segments. */
@@ -275,25 +319,31 @@ export async function getSession(id: string): Promise<Session | null> {
   return session ?? null;
 }
 
-/** Insert or replace a session. */
+/** Insert or replace a session and its lightweight metadata mirror. */
 export async function saveSession(session: Session): Promise<void> {
-  await runTransaction(SESSION_STORE, 'readwrite', (store) =>
-    requestToPromise(store.put(session)),
-  );
+  await runTransaction([SESSION_STORE, SESSION_META_STORE], 'readwrite', (store, tx) => {
+    const result = store.put(session);
+    tx.objectStore(SESSION_META_STORE).put(toSessionMeta(session));
+    return requestToPromise(result);
+  });
 }
 
 /** Delete one session by id. Missing ids are ignored. */
 export async function deleteSession(id: string): Promise<void> {
-  await runTransaction(SESSION_STORE, 'readwrite', (store) =>
-    requestToPromise(store.delete(id)),
-  );
+  await runTransaction([SESSION_STORE, SESSION_META_STORE], 'readwrite', (store, tx) => {
+    const result = store.delete(id);
+    tx.objectStore(SESSION_META_STORE).delete(id);
+    return requestToPromise(result);
+  });
 }
 
 /** Remove every stored session. Settings are left untouched. */
 export async function clearSessions(): Promise<void> {
-  await runTransaction(SESSION_STORE, 'readwrite', (store) =>
-    requestToPromise(store.clear()),
-  );
+  await runTransaction([SESSION_STORE, SESSION_META_STORE], 'readwrite', (store, tx) => {
+    const result = store.clear();
+    tx.objectStore(SESSION_META_STORE).clear();
+    return requestToPromise(result);
+  });
 }
 
 /** Load the persisted settings, or null when nothing has been saved yet. */

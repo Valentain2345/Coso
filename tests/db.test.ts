@@ -130,6 +130,50 @@ describe('sessions', () => {
     expect(Object.keys(meta).sort()).toEqual(META_FIELDS);
   });
 
+  it('lists from the metadata mirror without reading full sessions', async () => {
+    const session = makeSession();
+    await saveSession(session);
+
+    // Remove only the heavy record. The mirror must still serve the list.
+    const db = await openDatabase();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('sessions', 'readwrite');
+      tx.objectStore('sessions').delete(session.id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+
+    const sessions = await listSessions();
+    expect(sessions.map((meta) => meta.id)).toEqual([session.id]);
+  });
+
+  it('backfills the metadata mirror when upgrading a v2 database', async () => {
+    const legacy = makeSession({ title: 'Legacy recording', createdAt: 5_000 });
+
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, 2);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        const sessions = db.createObjectStore('sessions', { keyPath: 'id' });
+        sessions.createIndex('createdAt', 'createdAt', { unique: false });
+        db.createObjectStore('settings', { keyPath: 'key' });
+        db.createObjectStore('jobs', { keyPath: 'id' });
+        db.createObjectStore('jobAudio', { keyPath: 'id' });
+        sessions.put(legacy);
+      };
+      request.onsuccess = () => {
+        request.result.close();
+        resolve();
+      };
+      request.onerror = () => reject(request.error);
+    });
+
+    const sessions = await listSessions();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toMatchObject({ id: legacy.id, title: 'Legacy recording' });
+    expect(sessions[0]).not.toHaveProperty('audioBlob');
+  });
+
   it('gets a full session including its audio blob', async () => {
     const session = makeSession();
     await saveSession(session);

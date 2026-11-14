@@ -168,10 +168,11 @@ export const es: Dict = {
   'capture.record.opening': 'Abriendo el micrófono…',
   'capture.record.unavailable': 'Micrófono no disponible',
   'capture.import.strong': 'Importar audio',
-  'capture.import.sub': 'Elige un archivo de este equipo',
-  'capture.drop.aria': 'Suelta un archivo de audio aquí o presiona Enter para buscar',
-  'capture.drop.text': 'Suelta un archivo de audio aquí',
-  'capture.drop.hint': 'WAV, MP3, M4A, OGG, FLAC o WebM · hasta 4 horas',
+  'capture.import.sub': 'Elige uno o varios archivos de este equipo',
+  'capture.drop.aria': 'Suelta archivos de audio aquí o presiona Enter para buscar',
+  'capture.drop.text': 'Suelta archivos de audio aquí',
+  'capture.drop.hint':
+    'WAV, MP3, M4A, OGG, FLAC o WebM · hasta 4 horas cada uno · suelta varios para ponerlos en cola',
   'capture.notes.privacy': 'Privado por defecto. El audio se queda en este navegador.',
   'capture.notes.local': 'Sin cuentas, sin subidas, sin servidores.',
   'capture.notes.chunks': 'Las grabaciones largas se procesan en fragmentos y se reanudan tras recargar.',
@@ -195,6 +196,12 @@ export const es: Dict = {
 
   // Progress -----------------------------------------------------------------
   'progress.gettingStarted': 'Empezando…',
+  'progress.batch': 'Grabación {index} de {total}',
+  'batch.background': 'Transcribiendo {index} de {total} en segundo plano',
+  'toast.batchDone.title': 'Lote terminado',
+  'toast.batchDone.desc': '{done} de {total} transcripciones guardadas.',
+  'toast.batchDone.titleSome': 'Lote terminado con errores',
+  'toast.batchDone.descSome': '{done} de {total} guardadas. Puedes reanudar el resto más tarde.',
   'progress.step.decode.label': 'Leer el audio',
   'progress.step.decode.note': 'En fragmentos de 90 segundos',
   'progress.step.load.label': 'Preparar modelos',
@@ -268,6 +275,7 @@ export const es: Dict = {
   'preview.settings': 'Ajustes rápidos',
   'preview.start': 'Transcribir todo',
   'preview.discard': 'Descartar grabación',
+  'preview.queued': '{count} más en cola después de esta.',
   'preview.repair': 'Reparar audio',
   'preview.enhanced': 'Reparado',
 
@@ -306,6 +314,14 @@ export const es: Dict = {
   'transcript.copyFail.desc': 'Tu navegador bloqueó el acceso al portapapeles.',
   'transcript.copyOk.title': 'Transcripción copiada',
   'transcript.copyOk.desc': '{count} en tu portapapeles.',
+  'transcript.share.label': 'Compartir',
+  'transcript.share.ok.title': 'Transcripción compartida',
+  'transcript.share.ok.desc': 'Enviada con el menú de compartir del sistema.',
+  'transcript.share.copied.title': 'Transcripción copiada',
+  'transcript.share.copied.desc':
+    'Aquí no se puede compartir, así que la transcripción está en tu portapapeles.',
+  'transcript.share.fail.title': 'No se pudo compartir',
+  'transcript.share.fail.desc': 'Se bloquearon el menú de compartir y el portapapeles.',
 
   // Player -------------------------------------------------------------------
   'player.region': 'Reproductor de audio',

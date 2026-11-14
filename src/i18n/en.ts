@@ -169,10 +169,11 @@ export const en = {
   'capture.record.opening': 'Opening microphone…',
   'capture.record.unavailable': 'Microphone not available',
   'capture.import.strong': 'Import audio',
-  'capture.import.sub': 'Choose a file from this device',
-  'capture.drop.aria': 'Drop an audio file here or press Enter to browse',
-  'capture.drop.text': 'Drop an audio file here',
-  'capture.drop.hint': 'WAV, MP3, M4A, OGG, FLAC or WebM · up to 4 hours',
+  'capture.import.sub': 'Choose one or several files from this device',
+  'capture.drop.aria': 'Drop audio files here or press Enter to browse',
+  'capture.drop.text': 'Drop audio files here',
+  'capture.drop.hint':
+    'WAV, MP3, M4A, OGG, FLAC or WebM · up to 4 hours each · drop several to queue them',
   'capture.notes.privacy': 'Private by default. Audio stays in this browser.',
   'capture.notes.local': 'No account, no upload, no server.',
   'capture.notes.chunks': 'Long recordings are processed in chunks and resume after a reload.',
@@ -196,6 +197,12 @@ export const en = {
 
   // Progress -----------------------------------------------------------------
   'progress.gettingStarted': 'Getting started…',
+  'progress.batch': 'Recording {index} of {total}',
+  'batch.background': 'Transcribing {index} of {total} in the background',
+  'toast.batchDone.title': 'Batch finished',
+  'toast.batchDone.desc': '{done} of {total} transcripts saved.',
+  'toast.batchDone.titleSome': 'Batch finished with errors',
+  'toast.batchDone.descSome': '{done} of {total} saved. You can resume the rest later.',
   'progress.step.decode.label': 'Read audio',
   'progress.step.decode.note': 'Streaming in 90-second chunks',
   'progress.step.load.label': 'Prepare models',
@@ -269,6 +276,7 @@ export const en = {
   'preview.settings': 'Quick settings',
   'preview.start': 'Transcribe all',
   'preview.discard': 'Discard recording',
+  'preview.queued': '{count} more queued after this one.',
   'preview.repair': 'Repair audio',
   'preview.enhanced': 'Repaired',
 
@@ -306,6 +314,14 @@ export const en = {
   'transcript.copyFail.desc': 'Your browser blocked clipboard access.',
   'transcript.copyOk.title': 'Transcript copied',
   'transcript.copyOk.desc': '{count} on your clipboard.',
+  'transcript.share.label': 'Share',
+  'transcript.share.ok.title': 'Transcript shared',
+  'transcript.share.ok.desc': 'Sent with the system share sheet.',
+  'transcript.share.copied.title': 'Transcript copied',
+  'transcript.share.copied.desc':
+    'Sharing is not available here, so the transcript is on your clipboard.',
+  'transcript.share.fail.title': 'Could not share',
+  'transcript.share.fail.desc': 'Sharing and clipboard access were both blocked.',
 
   // Player -------------------------------------------------------------------
   'player.region': 'Audio player',

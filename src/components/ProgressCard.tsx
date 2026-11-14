@@ -9,6 +9,9 @@ interface Props {
   elapsed: number;
   error: string | null;
   sourceName: string | null;
+  /** 1-based position in a multi-file batch, when there is one. */
+  batchIndex?: number;
+  batchTotal?: number;
   onCancel: () => void;
   onRetry: () => void;
   onDismiss: () => void;
@@ -42,6 +45,8 @@ export const ProgressCard: React.FC<Props> = ({
   elapsed,
   error,
   sourceName,
+  batchIndex,
+  batchTotal,
   onCancel,
   onRetry,
   onDismiss,
@@ -101,6 +106,11 @@ export const ProgressCard: React.FC<Props> = ({
         <div>
           <h2>{localizeProgress(progress.message || '', lang) || t('progress.gettingStarted')}</h2>
           <p>
+            {batchTotal && batchTotal > 1 && batchIndex ? (
+              <span className="progress-batch">
+                {t('progress.batch', { index: batchIndex, total: batchTotal })}
+              </span>
+            ) : null}
             {sourceName ? <span className="progress-source">{sourceName}</span> : null}
             <span>{t('time.elapsed', { time: formatElapsed(elapsed, t('time.minutes'), t('time.seconds')) })}</span>
             {eta ? <span>{t('time.aboutLeft', { time: formatRemaining(eta, '') })}</span> : null}

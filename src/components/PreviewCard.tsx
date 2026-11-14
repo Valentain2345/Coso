@@ -2,14 +2,17 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import { Loader2, Play, SlidersHorizontal, Wand2, X } from 'lucide-react';
 import type { TranscribeSource } from '../hooks/useTranscription';
 import { useI18n } from '../i18n';
+import { PREVIEW_SECONDS, previewSecondsFor } from '../lib/preview';
 
-export const PREVIEW_SECONDS = 5;
+export { PREVIEW_SECONDS };
 
 interface Props {
   source: TranscribeSource;
   busy?: boolean;
   /** True when the source has already been repaired and the original is kept. */
   enhanced?: boolean;
+  /** Extra recordings waiting behind this one. */
+  queued?: number;
   onStart: () => void;
   onOpenSettings: () => void;
   onRepair?: () => void;
@@ -27,13 +30,15 @@ function formatClock(seconds: number): string {
 }
 
 /**
- * Plays the first PREVIEW_SECONDS seconds of a source so the user can judge
- * the recording before committing to a (potentially long) transcription run.
+ * Plays the first few seconds of a source so the user can judge the recording
+ * before committing to a (potentially long) transcription run. Long sources get
+ * a longer window; see `previewSecondsFor`.
  */
 export const PreviewCard: React.FC<Props> = ({
   source,
   busy = false,
   enhanced = false,
+  queued = 0,
   onStart,
   onOpenSettings,
   onRepair,
@@ -46,6 +51,10 @@ export const PreviewCard: React.FC<Props> = ({
   const [position, setPosition] = React.useState(0);
   const [duration, setDuration] = React.useState<number | null>(null);
   const [objectUrl, setObjectUrl] = React.useState<string | null>(null);
+
+  // The real duration is only known after metadata loads; before that the
+  // short preview applies.
+  const previewSeconds = previewSecondsFor(duration);
 
   useEffect(() => {
     const url = URL.createObjectURL(source.blob);
@@ -65,12 +74,12 @@ export const PreviewCard: React.FC<Props> = ({
   const handleTimeUpdate = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (audio.currentTime >= PREVIEW_SECONDS) {
+    if (audio.currentTime >= previewSeconds) {
       audio.pause();
-      audio.currentTime = PREVIEW_SECONDS;
+      audio.currentTime = previewSeconds;
     }
     setPosition(audio.currentTime);
-  }, []);
+  }, [previewSeconds]);
 
   return (
     <section className="preview-card" aria-label={t('preview.aria')}>
@@ -91,6 +100,9 @@ export const PreviewCard: React.FC<Props> = ({
             {source.name ?? t('preview.micSource')} · {formatBytes(source.blob.size)}
             {duration !== null ? ` · ${formatClock(duration)}` : ''}
           </p>
+          {queued > 0 && (
+            <p className="preview-queue">{t('preview.queued', { count: queued })}</p>
+          )}
         </div>
         <button className="preview-close" onClick={onCancel} aria-label={t('common.cancel')}>
           <X size={18} />
@@ -113,11 +125,11 @@ export const PreviewCard: React.FC<Props> = ({
       <div className="preview-meter" aria-hidden="true">
         <span
           className="preview-meter-fill"
-          style={{ width: `${Math.min(100, (position / PREVIEW_SECONDS) * 100)}%` }}
+          style={{ width: `${Math.min(100, (position / previewSeconds) * 100)}%` }}
         />
       </div>
 
-      <p className="preview-hint">{t('preview.hint', { seconds: PREVIEW_SECONDS })}</p>
+      <p className="preview-hint">{t('preview.hint', { seconds: previewSeconds })}</p>
 
       <div className="preview-actions">
         <button className="btn btn-ghost" onClick={playPreview} disabled={busy}>
