@@ -38,13 +38,46 @@ body {
   font-family: var(--font-ui);
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  overflow-wrap: anywhere;
 }
 
-/* Header */
+/* Short headings balance; body copy only avoids orphans. */
+h1, h2, h3 { text-wrap: balance; }
+p, li, blockquote { text-wrap: pretty; }
+
+/* Download buttons and any future call to action share one look. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 12px 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  color: inherit;
+  font: 600 15px var(--font-ui);
+  text-decoration: none;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.btn:hover { border-color: var(--accent-line); transform: translateY(-1px); }
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+/* Header: edge-to-edge safe areas on phones so the page never renders under a
+   notch or the status bar. */
 .top {
   max-width: 1040px;
   margin: 0 auto;
   padding: 18px 24px;
+  padding-top: calc(18px + env(safe-area-inset-top, 0px));
+  padding-left: calc(24px + env(safe-area-inset-left, 0px));
+  padding-right: calc(24px + env(safe-area-inset-right, 0px));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -65,6 +98,7 @@ body {
   color: var(--ink-2);
   font: 500 13px var(--font-ui);
   padding: 6px 14px;
+  min-height: 44px;
   border-radius: 999px;
   cursor: pointer;
 }
@@ -216,6 +250,26 @@ footer {
 .footer-links { margin-top: 6px; }
 .footer-links a { color: var(--accent); text-decoration: none; }
 .footer-links a:hover { text-decoration: underline; }
+
+/* Touch: 44 px targets and one download per row on narrow phones. Links inside
+   sentences are exempt from WCAG 2.5.5, but the header brand and the footer
+   row are standalone targets, so they get the full size. */
+@media (pointer: coarse) {
+  .brand { min-height: 44px; }
+  .footer-links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 4px;
+  }
+}
+@media (max-width: 480px) {
+  .downloads { flex-direction: column; }
+  .dl { width: 100%; }
+  .hero { margin-top: 22px; }
+  .features, .guides, .privacy { margin-top: 52px; }
+  footer { padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px)); }
+}
 
 /* Language visibility: only one dictionary is rendered at a time */
 [data-i18n] { display: revert; }

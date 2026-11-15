@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# The SPA under /app/ is a single page; everything it needs is linked from it.
+Sitemap: https://valentain2345.github.io/Coso/sitemap.xml

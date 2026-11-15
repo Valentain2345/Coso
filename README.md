@@ -44,7 +44,8 @@ gh release create v2.0.0 `
 
 1. Create a repository (e.g. `<user>/coso` or `<user>.github.io`) and push
    **this folder's contents** to it (not the app — just `index.html`,
-   `styles.css`, `app.js` and `assets/`).
+   `styles.css`, `app.js`, `robots.txt`, `sitemap.xml`, `404.html` and
+   `assets/`).
 2. GitHub Pages only serves from a branch: either push the site to `main`
    and set **Settings → Pages → Source: Deploy from a branch → main / (root)**,
    or add a workflow at `.github/workflows/pages.yml` that uploads the folder.
@@ -59,3 +60,49 @@ The page opens in the visitor's language (Spanish if their browser is Spanish,
 English otherwise) and can be switched with the button in the header; the
 choice is remembered in `localStorage`. It follows the same behaviour as the
 app and its installer.
+
+The switch also rewrites `<title>`, the description and the Open Graph/Twitter
+titles, so a shared link and a search result read in the visitor's language.
+
+## Search engines and social cards
+
+The page is plain HTML on purpose: no framework bundle, no hydration, so it
+stays inside the Core Web Vitals budget on a phone.
+
+| File | Why |
+|---|---|
+| `robots.txt` | allows everything and points at the sitemap |
+| `sitemap.xml` | `/` and `/app/` with `lastmod` |
+| `404.html` | GitHub Pages serves it for unknown paths; keeps the brand and two working links |
+| `assets/og.png` | 1200x630 card for Open Graph, Twitter and `SoftwareApplication.image` |
+| `assets/apple-touch-icon.png` | 180x180 home-screen icon for iOS |
+
+`index.html` carries `canonical`, `robots`, `color-scheme`, dual
+`theme-color`, `og:*`, `twitter:*`, `viewport-fit=cover` and a JSON-LD graph
+with `WebSite` and `SoftwareApplication` (version, platforms, price 0, licence,
+feature list). The download buttons and the footer links are real `href`s, so
+they work before `app.js` runs or when it fails.
+
+Regenerate the two generated images after changing the icon or the copy:
+
+```powershell
+cd "..\Coso audio app"
+node tools/make-site-assets.mjs     # writes ../Coso audio page/assets/{og.png,apple-touch-icon.png}
+```
+
+`tests/site.test.ts` in the app repository verifies all of the above, including
+the real pixel size of both PNGs.
+
+To request indexing, submit the sitemap in **Google Search Console** (the only
+way Google accepts a new site) and POST the URLs to IndexNow for Bing and
+Yandex:
+
+```powershell
+# after publishing, with <key> also saved as Coso/<key>.txt
+Invoke-RestMethod -Method Post https://api.indexnow.org/indexnow -ContentType 'application/json' -Body (@{
+  host = 'valentain2345.github.io'
+  key  = '<key>'
+  keyLocation = "https://valentain2345.github.io/Coso/<key>.txt"
+  urlList = @('https://valentain2345.github.io/Coso/', 'https://valentain2345.github.io/Coso/app/')
+} | ConvertTo-Json)
+```

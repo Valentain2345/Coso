@@ -55,6 +55,7 @@ const TRANSLATIONS = {
     'footer.line': 'Coso — free, open-source lecture transcription.',
     'footer.source': 'Source code',
     'footer.issues': 'Report a problem',
+    'footer.webapp': 'Web app',
   },
   es: {
     'hero.title': 'Graba la clase.<br />Quédate la transcripción.',
@@ -99,7 +100,19 @@ const TRANSLATIONS = {
     'footer.line': 'Coso — transcripción de clases libre y de código abierto.',
     'footer.source': 'Código fuente',
     'footer.issues': 'Reportar un problema',
+    'footer.webapp': 'App web',
   },
+};
+
+const META = {
+  "en": {
+    "description": "Coso records lectures and meetings and transcribes them on your own device with Whisper. Free and open source for Windows, Android and the browser - no uploads, no accounts.",
+    "title": "Coso - lecture transcription, on your device"
+  },
+  "es": {
+    "description": "Coso graba clases y reuniones y las transcribe en tu propio dispositivo con Whisper. Gratis y de código abierto para Windows, Android y el navegador, sin subir nada.",
+    "title": "Coso - transcripción de clases, en tu dispositivo"
+  }
 };
 
 function setLang(lang) {
@@ -113,7 +126,18 @@ function setLang(lang) {
     const value = TRANSLATIONS[lang][el.dataset.i18n];
     if (value !== undefined) el.innerHTML = value;
   }
-  document.title = lang === 'es' ? 'Coso — transcripción de clases, en tu dispositivo' : 'Coso — lecture transcription, on your device';
+  const meta = META[lang];
+  document.title = meta.title;
+  const setMeta = (selector, value) => {
+    const tag = document.querySelector(selector);
+    if (tag) tag.setAttribute('content', value);
+  };
+  setMeta('meta[name="description"]', meta.description);
+  setMeta('meta[property="og:title"]', meta.title);
+  setMeta('meta[property="og:description"]', meta.description);
+  setMeta('meta[property="og:locale"]', lang);
+  setMeta('meta[name="twitter:title"]', meta.title);
+  setMeta('meta[name="twitter:description"]', meta.description);
 }
 
 function initialLang() {

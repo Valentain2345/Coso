@@ -2,21 +2,96 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#12161a" />
-    <meta name="description" content="Download Coso — record lectures and meetings, transcribe them on your device with Whisper, and export clean notes. Free, private, no servers." />
-    <meta property="og:title" content="Coso — lecture transcription, on your device" />
-    <meta property="og:description" content="Record, transcribe, edit and export — all on your own device. No servers, no accounts." />
-    <meta property="og:image" content="assets/icon-512.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#fbfbf8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#12161a" media="(prefers-color-scheme: dark)" />
+    <title>Coso - lecture transcription, on your device</title>
+    <meta
+      name="description"
+      content="Coso records lectures and meetings and transcribes them on your own device with Whisper. Free and open source for Windows, Android and the browser - no uploads, no accounts."
+    />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <link rel="canonical" href="https://valentain2345.github.io/Coso/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Coso" />
+    <meta property="og:locale" content="en" />
+    <meta property="og:locale:alternate" content="es" />
+    <meta property="og:url" content="https://valentain2345.github.io/Coso/" />
+    <meta property="og:title" content="Coso - lecture transcription, on your device" />
+    <meta
+      property="og:description"
+      content="Record, transcribe, edit and export - all on your own device. Free, open source, no servers and no accounts."
+    />
+    <meta property="og:image" content="https://valentain2345.github.io/Coso/assets/og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Coso - record the lecture, keep the transcript" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Coso - lecture transcription, on your device" />
+    <meta
+      name="twitter:description"
+      content="On-device Whisper transcription for Windows, Android and the web. Free and open source."
+    />
+    <meta name="twitter:image" content="https://valentain2345.github.io/Coso/assets/og.png" />
+
     <link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Literata:ital,opsz,wght@0,7..72,400;1,7..72,400&display=swap"
       rel="stylesheet"
     />
-    <title>Coso — lecture transcription, on your device</title>
     <link rel="stylesheet" href="styles.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://valentain2345.github.io/Coso/#website",
+            "url": "https://valentain2345.github.io/Coso/",
+            "name": "Coso",
+            "inLanguage": ["en", "es"],
+            "publisher": { "@id": "https://valentain2345.github.io/Coso/#app" }
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://valentain2345.github.io/Coso/#app",
+            "name": "Coso",
+            "applicationCategory": "ProductivityApplication",
+            "applicationSubCategory": "Transcription",
+            "operatingSystem": "Windows 10, Windows 11, Android, Web",
+            "softwareVersion": "2.3.0",
+            "description": "Records lectures and meetings, then transcribes them on your own device with Whisper. Speakers are separated, the transcript is editable, and exports cover TXT, Markdown, Word, PDF and SRT/VTT.",
+            "url": "https://valentain2345.github.io/Coso/",
+            "downloadUrl": "https://github.com/Valentain2345/Coso/releases/latest",
+            "installUrl": "https://valentain2345.github.io/Coso/app/",
+            "image": "https://valentain2345.github.io/Coso/assets/og.png",
+            "screenshot": "https://valentain2345.github.io/Coso/assets/og.png",
+            "license": "https://github.com/Valentain2345/Coso/blob/main/LICENSE",
+            "isAccessibleForFree": true,
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+            "featureList": [
+              "On-device transcription with Whisper",
+              "Speaker diarization",
+              "Editable transcript with timestamps",
+              "Export to TXT, Markdown, Word, PDF, SRT and VTT",
+              "Noise removal and audio repair",
+              "Works offline once models are cached"
+            ],
+            "author": {
+              "@type": "Organization",
+              "name": "Coso",
+              "url": "https://github.com/Valentain2345/Coso"
+            }
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <header class="top">
@@ -40,7 +115,7 @@
             export to TXT, Word, PDF or subtitles.
           </p>
           <div class="downloads">
-            <a class="dl primary" id="dl-windows" data-i18n-attr="title:dl.windows.title" href="#" title="Download the Windows installer">
+            <a class="dl primary" id="dl-windows" data-i18n-attr="title:dl.windows.title" href="https://github.com/Valentain2345/Coso/releases/latest/download/Coso-setup.exe" title="Download the Windows installer">
               <span class="dl-icon" aria-hidden="true">
                 <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5 10.5 4.4v7.1H3V5.5Zm0 13 7.5 1.1v-7H3v5.9Zm8.5 1.2L21 21V12.5h-9.5v7.2Zm0-15.4v7.2H21V3l-9.5 1.3Z"/></svg>
               </span>
@@ -49,7 +124,7 @@
                 <span class="dl-sub" data-i18n="dl.windows.sub">Installer · 22 MB</span>
               </span>
             </a>
-            <a class="dl" id="dl-android" data-i18n-attr="title:dl.android.title" href="#" title="Download the Android APK">
+            <a class="dl" id="dl-android" data-i18n-attr="title:dl.android.title" href="https://github.com/Valentain2345/Coso/releases/latest/download/Coso.apk" title="Download the Android APK">
               <span class="dl-icon" aria-hidden="true">
                 <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="m17.6 9.5 1.9-3.3a.4.4 0 0 0-.7-.4l-1.9 3.3A11.7 11.7 0 0 0 12 8.2c-1.7 0-3.4.3-4.9.9L5.2 5.8a.4.4 0 0 0-.7.4L6.4 9.5C4.3 10.7 2.9 12.7 2.7 15h18.6c-.2-2.3-1.6-4.3-3.7-5.5ZM7.5 13a.8.8 0 1 1 0-1.6.8.8 0 0 1 0 1.6Zm9 0a.8.8 0 1 1 0-1.6.8.8 0 0 1 0 1.6Z"/></svg>
               </span>
@@ -73,7 +148,7 @@
           </p>
         </div>
         <div class="hero-art" aria-hidden="true">
-          <img src="assets/icon-512.png" alt="" width="180" height="180" />
+          <img src="assets/icon-512.png" alt="" width="180" height="180" fetchpriority="high" decoding="async" />
           <span class="wave big"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
         </div>
       </section>
@@ -151,8 +226,9 @@
     <footer>
       <p data-i18n="footer.line">Coso — free, open-source lecture transcription.</p>
       <p class="footer-links">
-        <a href="#" id="link-repo" data-i18n="footer.source">Source code</a> ·
-        <a href="#" id="link-issues" data-i18n="footer.issues">Report a problem</a>
+        <a href="https://github.com/Valentain2345/Coso" id="link-repo" data-i18n="footer.source">Source code</a> ·
+        <a href="https://github.com/Valentain2345/Coso/issues" id="link-issues" data-i18n="footer.issues">Report a problem</a> ·
+        <a href="app/" data-i18n="footer.webapp">Web app</a>
       </p>
     </footer>
 

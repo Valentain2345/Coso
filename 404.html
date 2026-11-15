@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#fbfbf8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#12161a" media="(prefers-color-scheme: dark)" />
+    <title>Page not found - Coso</title>
+    <link rel="icon" type="image/svg+xml" href="/Coso/assets/icon.svg" />
+    <style>
+      /* Self-contained on purpose: GitHub Pages serves this file for any unknown
+         path, so it must not depend on a stylesheet that may not resolve. */
+      :root {
+        color-scheme: light dark;
+        --surface: #fbfbf8;
+        --ink: #15191b;
+        --ink-2: #3d4448;
+        --muted: #6b7472;
+        --accent: #d9502b;
+        --border: #dcdcd4;
+        --ui: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+        --read: 'Literata', Georgia, 'Times New Roman', serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --surface: #12161a;
+          --ink: #edf0eb;
+          --ink-2: #c2cac6;
+          --muted: #8d9793;
+          --border: #2a3236;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        background: var(--surface);
+        color: var(--ink);
+        font-family: var(--ui);
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
+        padding: calc(18px + env(safe-area-inset-top, 0px))
+          calc(24px + env(safe-area-inset-right, 0px))
+          calc(40px + env(safe-area-inset-bottom, 0px))
+          calc(24px + env(safe-area-inset-left, 0px));
+      }
+      .top { max-width: 1040px; margin: 0 auto; }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 44px;
+        font-weight: 700;
+        font-size: 18px;
+        letter-spacing: 0.02em;
+        color: inherit;
+        text-decoration: none;
+      }
+      .wave { display: inline-flex; align-items: flex-end; gap: 4px; height: 22px; }
+      .wave i { width: 4px; border-radius: 3px; background: var(--accent); }
+      .wave i:nth-child(1) { height: 9px; }
+      .wave i:nth-child(2) { height: 18px; }
+      .wave i:nth-child(3) { height: 22px; }
+      .wave i:nth-child(4) { height: 13px; }
+      .wave i:nth-child(5) { height: 8px; }
+      main { max-width: 560px; margin: 12vh auto 0; }
+      h1 {
+        margin: 0;
+        font-family: var(--read);
+        font-weight: 600;
+        font-size: clamp(2rem, 6vw, 3rem);
+        line-height: 1.12;
+        letter-spacing: -0.03em;
+        text-wrap: balance;
+      }
+      p { margin: 14px 0 0; color: var(--muted); text-wrap: pretty; }
+      .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 48px;
+        padding: 12px 22px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--surface);
+        color: inherit;
+        font: 600 15px var(--ui);
+        text-decoration: none;
+      }
+      .btn:hover, .btn:focus-visible { border-color: var(--accent); }
+      .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="/Coso/">
+        <span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+        Coso
+      </a>
+    </header>
+    <main>
+      <h1>This page moved or never existed.</h1>
+      <p>
+        The link you followed is not part of Coso. The download page and the web app are still one
+        click away.
+      </p>
+      <div class="actions">
+        <a class="btn primary" href="/Coso/">Download page</a>
+        <a class="btn" href="/Coso/app/">Open the web app</a>
+      </div>
+    </main>
+  </body>
+</html>
