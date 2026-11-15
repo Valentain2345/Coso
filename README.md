@@ -247,17 +247,35 @@ Two Windows quirks the build already handles — worth knowing if it breaks:
   directly. Requires `npm install` in the project root before Gradle runs.
 - **Symlink privilege**: Tauri links the compiled `libcoso_lib.so` into
   `jniLibs/` with a symlink, which needs Windows Developer Mode. Without it,
-  run `npx tauri android build` once (it compiles the Rust core), then copy
-  the library and drive Gradle directly:
+  `tools/android-build.mjs` does those steps by hand: it runs
+  `tauri android build` (which compiles the library in production mode), copies
+  the `.so` into `jniLibs/`, then drives Gradle with the Rust tasks excluded.
 
   ```powershell
-  Copy-Item src-tauri\target\aarch64-linux-android\release\libcoso_lib.so `
-    src-tauri\gen\android\app\src\main\jniLibs\arm64-v8a\
-  .\gradlew.bat assembleUniversalDebug -x rustBuildArm64Debug   # from src-tauri\gen\android
+  npm run android:release        # writes app-universal-release.apk
   ```
 
-  (`-x rustBuildArm64Debug` skips Gradle's Rust task, which can only run
-  under a live `tauri android build` process — the library is already built.)
+  Never build the library with a bare
+  `cargo build --target aarch64-linux-android --release`: without
+  `--features tauri/custom-protocol` Tauri compiles the dev flavour and the APK
+  opens http://localhost:3000 instead of the bundled interface — the
+  "localhost/3000 unreachable" screen on a phone. If you must build it by hand:
+
+  ```powershell
+  $env:NDK_HOME = "$env:LOCALAPPDATA\Android\Sdk\ndk\27.0.12077973"
+  $env:CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER = "$env:NDK_HOME\toolchains\llvm\prebuilt\windows-x86_64\bin\aarch64-linux-android26-clang.cmd"
+  cargo build --target aarch64-linux-android --release --features tauri/custom-protocol
+  Copy-Item src-tauri\target\aarch64-linux-android\release\libcoso_lib.so `
+    src-tauri\gen\android\app\src\main\jniLibs\arm64-v8a\
+  .\gradlew.bat assembleUniversalRelease -x rustBuildArm64Release   # from src-tauri\gen\android
+  ```
+
+  `node tools/check-apk.mjs` cross-checks three things the broken build got
+  wrong: `dist/` is rooted at `/` (a web build for `/Coso/app/` makes the APK
+  request assets it does not serve), the library embeds the frontend it was
+  compiled with, and the APK packages that exact library. `npm run
+  android:release` and `tools/create-release.ps1` run the guard, so a dev-mode
+  or stale APK cannot be published again.
 
 Android E2E (`e2e/android.spec.ts`) drives the real app on an emulator or
 device over the WebView debugging socket. It skips automatically when none is
