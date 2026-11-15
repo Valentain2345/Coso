@@ -38,6 +38,13 @@ once in Google Search Console (Google accepts no other submission path), then
 POST the same URLs to IndexNow for Bing and Yandex after each release. Details
 and the exact request are in the download page's README.
 
+Search Console verification uses two proofs: the `google-site-verification`
+meta tag in both `index.html` files, and `public/googleea32ad5a5a8fb4e3.html`
+(served at `/Coso/app/…`, while the download page keeps its own copy at
+`/Coso/…`). The APK and installer embed the app document, so the tag travels
+with them but is inert there. `tests/site.test.ts` asserts the proof file is
+byte-identical and present at both roots.
+
 ## Google Drive: one-time setup
 
 Google does **not** allow an app to collect a Google email and password

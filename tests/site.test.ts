@@ -170,6 +170,21 @@ describe.skipIf(!hasPage)('download page', () => {
     expect(notFound).not.toContain('<link rel="stylesheet"');
     expect(notFound).toContain('env(safe-area-inset-top');
   });
+
+  it('keeps the Search Console proof at both site roots', () => {
+    const token = 'googleea32ad5a5a8fb4e3.html';
+    const proof = `google-site-verification: ${token}`;
+    expect(readPage(token)).toBe(proof);
+    // The app is a separate URL prefix, so the same proof ships under /app/.
+    expect(read('public/' + token)).toBe(proof);
+    expect(metaOf(html).get('google-site-verification')).toBe(
+      '9Bsem_NqfG2J19sAOtuDovHC2aY-Q-ryWSHPEzGT7VU',
+    );
+  });
+
+  it('never publishes local notes', () => {
+    expect(readPage('.gitignore')).toContain('otras cosas.txt');
+  });
 });
 
 describe('mobile status strip', () => {
