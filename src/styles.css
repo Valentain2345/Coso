@@ -2472,60 +2472,158 @@ p {
   color: var(--faint);
 }
 
-/* Compact status shown while the queue runs and the user keeps working. */
-.background-job {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 10px;
-  margin-bottom: 14px;
-  padding: 10px 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+/* Window-wide status strip for the background queue: it lives above the title
+   bar so a running transcription never takes the workspace away. */
+.job-strip {
+  flex: none;
+  position: relative;
+  border-bottom: 1px solid var(--line);
   background: var(--surface-2);
   font-size: 12.5px;
   color: var(--ink-2);
+  animation: job-strip-in 0.22s ease both;
 }
 
-.background-job > svg {
-  flex: none;
-}
-
-.background-job-text {
+.job-strip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 18px 0 30px;
   min-width: 0;
+}
+
+.job-strip-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+
+.job-strip-failed .job-strip-icon {
+  color: var(--danger);
+}
+
+.job-strip-text {
+  min-width: 0;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.job-strip-failed .job-strip-text {
+  color: var(--danger);
   font-weight: 500;
 }
 
-.background-job-name {
-  max-width: 30ch;
+.job-strip-name {
+  min-width: 0;
+  max-width: 26ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--muted);
 }
 
-.background-job-queue {
+.job-strip-queued {
+  flex: none;
   padding: 1px 8px;
   border-radius: 99px;
   background: var(--accent-soft);
   color: var(--accent);
+  font-size: 11.5px;
   font-weight: 600;
   white-space: nowrap;
 }
 
-.background-job-percent {
-  margin-left: auto;
+.job-strip-grow {
+  flex: 1;
+  min-width: 8px;
+}
+
+.job-strip-percent {
+  flex: none;
+  min-width: 4ch;
+  text-align: right;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   color: var(--ink-2);
 }
 
-.background-job-toggle {
-  margin-left: auto;
+.job-strip-toggle,
+.job-strip-cancel {
+  flex: none;
+  height: 26px;
+  padding: 0 8px;
+  color: var(--muted);
 }
 
-.background-job-percent + .background-job-toggle {
-  margin-left: 0;
+.job-strip-toggle {
+  gap: 4px;
+}
+
+.job-strip-toggle:hover,
+.job-strip-cancel:hover {
+  color: var(--ink);
+}
+
+/* Two-pixel meter along the bottom edge; no layout shift when it fills. */
+.job-strip-track {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 2px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.job-strip-track span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.25s linear;
+}
+
+.job-strip-failed .job-strip-track span {
+  background: var(--danger);
+}
+
+.job-strip-panel {
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  animation: job-strip-panel-in 0.18s ease both;
+}
+
+/* The step-by-step card loses its own frame inside the strip. */
+.job-strip-panel .progress-card {
+  max-width: 940px;
+  margin: 0 auto;
+  padding: 18px 30px 22px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+@keyframes job-strip-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes job-strip-panel-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .progress-minimize {
@@ -3213,6 +3311,14 @@ p {
   .topbar {
     padding: 12px 22px;
   }
+  .job-strip-row {
+    padding-left: 22px;
+    padding-right: 12px;
+  }
+  .job-strip-panel .progress-card {
+    padding-left: 22px;
+    padding-right: 22px;
+  }
   .capture-notes {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3280,6 +3386,17 @@ p {
     padding-left: calc(12px + env(safe-area-inset-left));
     padding-right: calc(12px + env(safe-area-inset-right));
     min-height: calc(66px + env(safe-area-inset-top));
+  }
+
+  .job-strip-row {
+    height: 38px;
+    padding-left: calc(14px + env(safe-area-inset-left));
+    padding-right: calc(10px + env(safe-area-inset-right));
+  }
+
+  .job-strip-panel .progress-card {
+    padding-left: calc(14px + env(safe-area-inset-left));
+    padding-right: calc(14px + env(safe-area-inset-right));
   }
 
   /* Settings also lives in the drawer footer on phones. Dropping the duplicate
@@ -3386,14 +3503,27 @@ p {
 }
 
 @media (max-width: 620px) {
-  .background-job-name {
-    max-width: 100%;
-    flex-basis: 100%;
-    order: 3;
+  .job-strip-row {
+    gap: 6px;
+    height: 38px;
+    padding: 0 8px 0 14px;
   }
 
-  .background-job-toggle-text {
+  .job-strip-name {
     display: none;
+  }
+
+  .job-strip-toggle-text {
+    display: none;
+  }
+
+  .job-strip-toggle,
+  .job-strip-cancel {
+    padding: 0 6px;
+  }
+
+  .job-strip-panel .progress-card {
+    padding: 16px 16px 20px;
   }
 
   .content {

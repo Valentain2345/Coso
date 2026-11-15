@@ -24,22 +24,34 @@ test('imports audio, transcribes on-device, and downloads the recording', async 
   await expect(page.locator('.preview-card')).toBeVisible({ timeout: 30_000 });
   await page.getByRole('button', { name: 'Transcribe all' }).click();
 
-  // The run continues in the background: the start screen stays usable so the
+  // The run continues above the title bar: the start screen stays usable so the
   // next lecture can be recorded or imported while this one is transcribed.
-  await expect(page.locator('.background-job')).toBeVisible({ timeout: 30_000 });
+  const strip = page.locator('.main-shell > .job-strip');
+  await expect(strip).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('button', { name: /Start recording/i })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Import audio' })).toBeVisible();
 
-  // The full step-by-step card is one click away and collapses back.
+  // The strip is chrome, not part of the scrolling content.
+  const stripBox = await strip.boundingBox();
+  const topbarBox = await page.locator('.topbar').boundingBox();
+  expect(stripBox).not.toBeNull();
+  expect(topbarBox).not.toBeNull();
+  expect(stripBox!.y).toBeLessThan(topbarBox!.y);
+  expect(stripBox!.height).toBeLessThan(60);
+
+  // The step-by-step panel opens inside the strip and folds back again, without
+  // taking the workspace away.
   await page.getByRole('button', { name: 'Show transcription details' }).click();
-  await expect(page.locator('.progress-card')).toBeVisible();
+  await expect(strip.locator('.job-strip-panel .progress-card')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Import audio' })).toBeVisible();
   await page.getByRole('button', { name: 'Continue in the background' }).click();
-  await expect(page.locator('.background-job')).toBeVisible();
+  await expect(strip.locator('.job-strip-panel')).toHaveCount(0);
+  await expect(strip).toBeVisible();
 
   // The first run downloads Whisper Base and the denoiser, then transcribes.
   await expect(page.locator('.transcript-card')).toBeVisible({ timeout: 12 * 60_000 });
   await expect(page.locator('.progress-card')).toHaveCount(0);
-  await expect(page.locator('.background-job')).toHaveCount(0);
+  await expect(page.locator('.job-strip')).toHaveCount(0);
 
   const firstPassage = page.locator('.segment-text').first();
   await expect(firstPassage).not.toHaveText('');

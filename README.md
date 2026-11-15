@@ -103,11 +103,13 @@ node tools/manual-media.mjs   # writes public/manual/*.png and *.gif
   one item at a time because the Whisper model and the WASM/WebGPU context are
   shared, so parallel items would double memory without finishing sooner
   (`src/lib/jobQueue.ts`).
-- **Unobtrusive progress.** While the queue runs, the workspace stays usable and
-  a compact bar shows the active recording, its percentage and how many items are
-  waiting. "Details" expands the full step-by-step card, and the card's minimize
-  button collapses it again. A failure opens the full card so the checkpoint can
-  be resumed; cancel stops the item in flight and drops the waiting work.
+- **Unobtrusive progress.** While the queue runs, a slim strip sits above the
+  title bar: active recording, its percentage and how many items are waiting,
+  with a two-pixel meter along the bottom edge. The workspace below keeps
+  working - record, import or read another transcript - and nothing is pushed
+  off screen. "Details" opens the step-by-step panel inside the strip and its
+  minimise button folds it back. A failure opens that panel with the retry
+  action; cancel stops the item in flight and drops the waiting work.
 - **Completion notification.** When a run ends while the app is in the
   background, Coso sends a system notification - the Tauri notification plugin
   on Windows and Android, the Web Notifications API in a browser - with the
@@ -284,6 +286,21 @@ npm test            # unit + component tests (Vitest)
 npm run test:e2e    # web E2E (Playwright, builds and serves on :4173)
 ```
 
+For the shell and the background queue there is also a visual/perf harness:
+
+```powershell
+npm run build
+npm run preview -- --port 4173 --strictPort   # in another terminal
+node tools/ui-check.mjs                       # screenshots + performance report
+```
+
+It drives a real transcription, screenshots the status strip on desktop and
+phone widths (including recording while a run is in flight and a "1 queued"
+badge), and writes `test-results/ui/report.json` with startup timings, strip
+geometry, main-thread busy time, long tasks, frame gaps and JS heap. Latest run:
+39 px strip above the title bar, 0 px horizontal overflow at 390 px, p50/p95
+frame gap 17 ms while scrolling during a run, heap flat at ~10 MB.
+
 Coverage:
 
 - `tests/i18n.test.ts` — dictionary parity (en/es), plurals, number formatting,
@@ -304,11 +321,12 @@ Coverage:
   items and reuse after reset.
 - `tests/notify.test.ts` - permission prompts per platform, foreground
   suppression, native-vs-web preference and unsupported environments.
-- `tests/backgroundJob.test.tsx` - the compact bar: batch position, queued
-  count, percentage, details toggle, cancel and localization.
-- `tests/progressView.test.ts` - when the full card may replace the workspace:
-  never over a recording or a queue that still has work, always on an explicit
-  expand.
+- `tests/jobStrip.test.tsx` - the status strip: batch position, queued count,
+  percentage and meter, the details panel, the failure state with retry, cancel
+  and localization.
+- `tests/queueNotice.test.ts` - which completion notice a drained queue gets:
+  none when cancelled or nothing succeeded, the solo toast, or the summary with
+  the final count.
 - `tests/share.test.ts` - share-sheet file/text payloads, clipboard fallback,
   dismissed sheets and blocked APIs.
 - `tests/modelCache.test.ts` - OPFS model cache: hashed names, streaming with

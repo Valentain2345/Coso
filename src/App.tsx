@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import { BackgroundJobBar } from './components/BackgroundJobBar';
+import { JobStrip } from './components/JobStrip';
 import { CapturePanel } from './components/CapturePanel';
 import { AudioRepairDialog } from './components/AudioRepairDialog';
 import { ConfirmDialog } from './components/ConfirmDialog';
@@ -8,7 +8,6 @@ import { DriveDialog } from './components/DriveDialog';
 import { ManualDialog } from './components/ManualDialog';
 import { PlayerBar } from './components/PlayerBar';
 import { PreviewCard } from './components/PreviewCard';
-import { ProgressCard } from './components/ProgressCard';
 import { QuickSettingsDialog } from './components/QuickSettingsDialog';
 import { SettingsDialog } from './components/SettingsDialog';
 import { Sidebar } from './components/Sidebar';
@@ -40,7 +39,7 @@ import { saveBlob } from './lib/export/save';
 import { applyReprocess } from './lib/session';
 import { JobQueue, type QueueSummary } from './lib/jobQueue';
 import { notifyTranscriptionReady, prepareNotifications } from './lib/notify';
-import { showFullProgressCard } from './lib/progressView';
+import { describeQueueCompletion } from './lib/queueNotice';
 import { repairAudio, type RepairPresetId } from './lib/audio/enhance';
 import type { JobState, SessionMeta, TranscriptSegment } from './types';
 
@@ -94,14 +93,14 @@ const App: React.FC = () => {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   /** 1-based position in the current run, used by the progress and background UI. */
   const [batch, setBatch] = useState<{ index: number; total: number } | null>(null);
-  /** True when the user opened the full step-by-step progress card. */
-  const [progressOpen, setProgressOpen] = useState(false);
+  /** True when the status strip shows the step-by-step details panel. */
+  const [jobExpanded, setJobExpanded] = useState(false);
   const transcribingRef = useRef(false);
   const queueRef = useRef(new JobQueue<QueueItem>());
   /** True once the user records or opens something while a run continues. */
   const movedOnRef = useRef(false);
   /** Title of the last transcript saved by the queue, for the completion notice. */
-  const lastSavedTitleRef = useRef<string | null>(null);
+  const lastSavedRef = useRef<{ title: string; words: number; speakers: number } | null>(null);
 
   const refreshJob = useCallback(async () => {
     try {
@@ -207,7 +206,11 @@ const App: React.FC = () => {
           await store.add(created, { activate: options?.activate ?? true });
         }
         await refreshStorage();
-        lastSavedTitleRef.current = created.title;
+        lastSavedRef.current = {
+          title: created.title,
+          words: created.wordCount,
+          speakers: created.speakerCount,
+        };
         if (options?.notify !== false) {
           push(
             t('toast.transcriptReady.title'),
@@ -262,8 +265,8 @@ const App: React.FC = () => {
 
       transcribingRef.current = true;
       movedOnRef.current = false;
-      lastSavedTitleRef.current = null;
-      setProgressOpen(false);
+      lastSavedRef.current = null;
+      setJobExpanded(false);
       queueRef.current.reset();
       queueRef.current.enqueue(items);
       setQueue([...queueRef.current.pending]);
@@ -272,16 +275,24 @@ const App: React.FC = () => {
         let summary: QueueSummary | null = null;
         try {
           summary = await queueRef.current.drain(
-            (item, position) => {
+            async (item, position) => {
               setQueue([...queueRef.current.pending]);
-              return runSource(item.source, item.resume ?? null, {
+              const outcome = await runSource(item.source, item.resume ?? null, {
                 replaceSessionId: item.replaceSessionId,
                 // Opening the finished transcript is only helpful when the user
                 // is still on the start screen and nothing else is queued.
                 activate: position.total === 1 && !movedOnRef.current,
-                // A final summary toast replaces one toast per file.
-                notify: position.total === 1,
+                // One notice per run: the solo toast or the queue summary is
+                // pushed below, once the real total (including work appended
+                // mid-run) is known.
+                notify: false,
               });
+              // A failure with nothing left to start is exactly what the
+              // details panel is for: retry, resume, or dismiss.
+              if (outcome === 'failed' && position.total === 1 && queueRef.current.pending.length === 0) {
+                setJobExpanded(true);
+              }
+              return outcome;
             },
             {
               onStart: (_item, position) =>
@@ -294,26 +305,36 @@ const App: React.FC = () => {
           setQueue([]);
         }
 
-        if (!summary || summary.cancelled || summary.total === 0) return;
+        const saved = lastSavedRef.current;
+        const notice = describeQueueCompletion(summary, saved);
+        if (notice.kind === 'none') return;
 
         await notifyTranscriptionReady({
           title: t('notify.title'),
           body:
-            summary.total > 1
-              ? t('notify.batch', { done: summary.done, total: summary.total })
-              : t('notify.single', {
-                  title: lastSavedTitleRef.current ?? t('app.newTranscript'),
-                }),
+            notice.kind === 'batch'
+              ? t('notify.batch', { done: notice.done, total: notice.total })
+              : t('notify.single', { title: saved?.title ?? t('app.newTranscript') }),
           tag: 'coso-transcript',
         });
 
-        if (summary.total === 1) return;
+        if (notice.kind === 'single') {
+          push(
+            t('toast.transcriptReady.title'),
+            'success',
+            t('toast.transcriptReady.desc', {
+              words: t('count.words', { count: notice.words }),
+              speakers: t('count.speakers', { count: notice.speakers }),
+            }),
+          );
+          return;
+        }
         push(
-          t(summary.failed > 0 ? 'toast.batchDone.titleSome' : 'toast.batchDone.title'),
-          summary.failed > 0 ? 'error' : 'success',
-          t(summary.failed > 0 ? 'toast.batchDone.descSome' : 'toast.batchDone.desc', {
-            done: summary.done,
-            total: summary.total,
+          t(notice.failed ? 'toast.batchDone.titleSome' : 'toast.batchDone.title'),
+          notice.failed ? 'error' : 'success',
+          t(notice.failed ? 'toast.batchDone.descSome' : 'toast.batchDone.desc', {
+            done: notice.done,
+            total: notice.total,
           }),
         );
       })();
@@ -341,8 +362,8 @@ const App: React.FC = () => {
       void prepareNotifications();
       transcribingRef.current = true;
       // An explicit re-run or resume has nothing new to read afterwards, so the
-      // step-by-step card is the useful view.
-      setProgressOpen(true);
+      // step-by-step panel is the useful view.
+      setJobExpanded(true);
       setPendingSource(null);
       try {
         await runSource(source, resume, options);
@@ -676,14 +697,6 @@ const App: React.FC = () => {
   const recording = recorder.status === 'recording' || recorder.status === 'paused' || recorder.status === 'requesting';
   const showProgress = transcription.running || transcription.progress.stage === 'error';
   const current = store.current;
-  const showFullProgress = showFullProgressCard({
-    active: showProgress,
-    running: transcription.running,
-    failed: transcription.progress.stage === 'error',
-    expanded: progressOpen,
-    queued: queue.length,
-    recording,
-  });
   const model = modelInfo(settings.model);
   const startWarning =
     [
@@ -739,6 +752,29 @@ const App: React.FC = () => {
       />
 
       <div className="main-shell">
+        {showProgress && (
+          <JobStrip
+            progress={transcription.progress}
+            elapsed={transcription.elapsed}
+            error={transcription.error}
+            sourceName={lastSource?.name ?? (lastSource ? t('app.micSource') : null)}
+            batchIndex={batch?.index}
+            batchTotal={batch?.total}
+            queued={queue.length}
+            expanded={jobExpanded}
+            onToggle={() => setJobExpanded((open) => !open)}
+            onCancel={cancelQueue}
+            onRetry={() => void retryLast()}
+            onDismiss={() => {
+              transcription.clear();
+              setJobExpanded(false);
+              setLastSource(null);
+              setPendingSource(null);
+              setPreviewQueue([]);
+            }}
+          />
+        )}
+
         <TopBar
           session={current}
           settings={settings}
@@ -754,75 +790,40 @@ const App: React.FC = () => {
 
         <main id="workspace" className="main-scroll">
           <div className={`content ${current ? 'content-session' : 'content-capture'}`}>
-            {showFullProgress ? (
-              <ProgressCard
-                progress={transcription.progress}
-                elapsed={transcription.elapsed}
-                error={transcription.error}
-                sourceName={lastSource?.name ?? (lastSource ? t('app.micSource') : null)}
-                batchIndex={batch?.index}
-                batchTotal={batch?.total}
-                onCancel={cancelQueue}
-                onMinimize={transcription.running ? () => setProgressOpen(false) : undefined}
-                onRetry={() => void retryLast()}
-                onDismiss={() => {
-                  transcription.clear();
-                  setProgressOpen(false);
-                  setLastSource(null);
+            {pendingSource ? (
+              <PreviewCard
+                source={pendingSource}
+                busy={repairBusy}
+                queueing={transcription.running}
+                enhanced={Boolean(pendingSource.storeBlob)}
+                queued={previewQueue.length}
+                onStart={handlePreviewStart}
+                onOpenSettings={handlePreviewSettings}
+                onRepair={() => setRepairOpen(true)}
+                onCancel={() => {
                   setPendingSource(null);
                   setPreviewQueue([]);
                 }}
               />
+            ) : recording ? (
+              <CapturePanel {...capturePanelProps} />
+            ) : current ? (
+              <TranscriptView
+                session={current}
+                player={player}
+                onEditSegment={handleEditSegment}
+                onEditSegmentStart={handleEditSegmentStart}
+                onRenameSpeaker={handleRenameSpeaker}
+                onReprocess={handleReprocess}
+                onToast={push}
+              />
             ) : (
-              <>
-                {showProgress && (
-                  <BackgroundJobBar
-                    progress={transcription.progress}
-                    sourceName={lastSource?.name ?? (lastSource ? t('app.micSource') : null)}
-                    batchIndex={batch?.index}
-                    batchTotal={batch?.total}
-                    queued={queue.length}
-                    expanded={false}
-                    onToggle={() => setProgressOpen(true)}
-                    onCancel={cancelQueue}
-                  />
-                )}
-                {pendingSource ? (
-                  <PreviewCard
-                    source={pendingSource}
-                    busy={repairBusy}
-                    queueing={transcription.running}
-                    enhanced={Boolean(pendingSource.storeBlob)}
-                    queued={previewQueue.length}
-                    onStart={handlePreviewStart}
-                    onOpenSettings={handlePreviewSettings}
-                    onRepair={() => setRepairOpen(true)}
-                    onCancel={() => {
-                      setPendingSource(null);
-                      setPreviewQueue([]);
-                    }}
-                  />
-                ) : recording ? (
-                  <CapturePanel {...capturePanelProps} />
-                ) : current ? (
-                  <TranscriptView
-                    session={current}
-                    player={player}
-                    onEditSegment={handleEditSegment}
-                    onEditSegmentStart={handleEditSegmentStart}
-                    onRenameSpeaker={handleRenameSpeaker}
-                    onReprocess={handleReprocess}
-                    onToast={push}
-                  />
-                ) : (
-                  <CapturePanel {...capturePanelProps} />
-                )}
-              </>
+              <CapturePanel {...capturePanelProps} />
             )}
           </div>
         </main>
 
-        {current?.audioBlob && !recording && !showFullProgress && (
+        {current?.audioBlob && !recording && (
           <PlayerBar
             session={current}
             player={player}
