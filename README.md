@@ -269,11 +269,13 @@ system-browser OAuth flow mentioned above.
 - Noise removal: **Basic** spectral filter, **Neural** DeepFilterNet3, or
   **Maximum** (DeepFilterNet3 plus an extra spectral pass).
 - Audio repair (before transcribing, from the preview card or "Re-transcribe"):
-  **Clean**, **Clear** or **Far**. It runs high-pass filtering, spectral
-  denoising, a low-mid boom cut, presence/air EQ, gentle compression and RMS
-  levelling, so a distant or grainy recording sounds closer and clearer. The
-  original recording is always kept and the repaired WAV is used only for the
-  run.
+  **Clean**, **Clear**, **Noisy** or **Far**, plus a fine-tune panel for mains
+  hum (auto/50/60 Hz notches with harmonics), noise reduction, sibilance,
+  clarity, warmth, air, a relative noise gate and level evening. The dialog
+  plays an A/B preview of the first 8 seconds and shows noise-floor, average
+  and peak levels before and after, so the choice is measurable. The original
+  recording is always kept and the repaired WAV is used only for the run; the
+  duration never changes, so transcript timestamps still match the saved audio.
 - Speaker precision: **Standard** or **Thorough** (denser windows, automatic
   voice count).
 - Speaker model: **WeSpeaker** (fast) or **Pyannote 3.0** segmentation with
@@ -296,10 +298,13 @@ node tools/ui-check.mjs                       # screenshots + performance report
 
 It drives a real transcription, screenshots the status strip on desktop and
 phone widths (including recording while a run is in flight and a "1 queued"
-badge), and writes `test-results/ui/report.json` with startup timings, strip
+badge), opens the repair dialog with its fine-tune panel at both widths, and
+writes `test-results/ui/report.json` with startup timings, strip and dialog
 geometry, main-thread busy time, long tasks, frame gaps and JS heap. Latest run:
 39 px strip above the title bar, 0 px horizontal overflow at 390 px, p50/p95
-frame gap 17 ms while scrolling during a run, heap flat at ~10 MB.
+frame gap 17 ms while scrolling during a run, heap flat at ~10 MB; the repair
+dialog fits 617 px with five presets, five sliders and two switches, and its
+body scrolls inside the panel instead of pushing the footer off-screen.
 
 Coverage:
 
@@ -335,10 +340,11 @@ Coverage:
   (listing without heavy records) and the v2 upgrade backfill.
 - `tests/basePath.test.ts` - sub-path URLs and web manifest rewriting for the
   GitHub Pages deployment.
-- `tests/enhance.test.ts` — repair DSP primitives (EQ, compressor, levelling,
-  limiter), preset monotonicity, and an SNR improvement check on real speech.
-- `tests/repair.test.tsx` — repair dialog decode, preset selection, WAV output,
-  decode failures and A/B playback.
+- `tests/enhance.test.ts` — repair DSP (notch/low shelf, hum detection, gate,
+  de-esser, EQ, compressor, levelling, limiter), preset shape, measurement and
+  an SNR improvement check on real speech.
+- `tests/repair.test.tsx` — repair dialog decode, presets, custom fine-tuning,
+  reset, no-op guard, before/after meters, WAV output and A/B playback.
 - `e2e/start-screen.spec.ts`, `e2e/transcription.spec.ts` — real UI flows,
   including a full on-device transcription of `tests/fixtures/speech.wav`.
 - `e2e/language.spec.ts` — English↔Spanish switch persists and keeps the

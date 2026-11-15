@@ -75,10 +75,49 @@ const paint = await page.evaluate(() => {
 
 await shot('01-start');
 
-console.log('> starting a transcription');
+// The repair tool gets the same visual treatment: presets, the fine-tune
+// panel, the before/after measurements and a phone-width pass.
+console.log('> opening the repair tool');
 await page.locator('input[type="file"]').setInputFiles(fixture);
 await page.locator('.preview-card').waitFor({ timeout: 30_000 });
+await page.getByRole('button', { name: 'Repair audio' }).click();
+const repair = page.getByRole('dialog', { name: 'Repair this audio' });
+await repair.waitFor({ timeout: 30_000 });
+await repair.locator('.repair-presets').waitFor({ timeout: 30_000 });
+await shot('01b-repair');
+const repairBase = await page.evaluate(() => {
+  const dialog = document.querySelector('.repair-body')?.closest('.modal');
+  return {
+    dialogHeight: Math.round(dialog?.getBoundingClientRect().height ?? 0),
+    presets: document.querySelectorAll('.repair-preset').length,
+    measured: Boolean(document.querySelector('.repair-levels')),
+    horizontalOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  };
+});
+await repair.getByRole('button', { name: /Fine-tune/ }).click();
+await page.waitForTimeout(400);
+await shot('01c-repair-fine-tune');
+const repairTune = await page.evaluate(() => ({
+  sliders: document.querySelectorAll('.repair-tune input[type="range"]').length,
+  switches: document.querySelectorAll('.repair-tune [role="switch"]').length,
+  bodyScrolls: (() => {
+    const body = document.querySelector('.modal-body');
+    return Boolean(body && body.scrollHeight > body.clientHeight);
+  })(),
+}));
+await page.setViewportSize({ width: 390, height: 844 });
+await page.waitForTimeout(300);
+await shot('01d-repair-phone');
+const repairPhone = await page.evaluate(() => ({
+  horizontalOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  presets: document.querySelectorAll('.repair-preset').length,
+}));
+await page.setViewportSize({ width: 1280, height: 820 });
+await repair.getByRole('button', { name: 'Cancel' }).click();
+await page.locator('.preview-card').waitFor();
 await page.getByRole('button', { name: 'Transcribe all' }).click();
+
+console.log('> starting a transcription');
 const strip = page.locator('.main-shell > .job-strip');
 await strip.waitFor({ timeout: 30_000 });
 await page.waitForTimeout(2000);
@@ -164,6 +203,7 @@ const report = {
   url,
   startupMs,
   ...paint,
+  repair: { ...repairBase, ...repairTune, phone: repairPhone },
   strip: { ...stripGeometry, ...detailsGeometry, ...phoneOverflow },
   recording: { ...recordingState, addToQueueButton: queuedLabel > 0, queuedBadge },
   perf: {

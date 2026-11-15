@@ -2699,7 +2699,7 @@ p {
 
 .repair-presets {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 8px;
 }
 
@@ -2750,6 +2750,151 @@ p {
 
 .repair-ab audio {
   display: none;
+}
+
+/* Fine tuning: a quiet disclosure under the presets. */
+.repair-tune-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 2px;
+  border: 0;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  text-align: left;
+}
+
+.repair-tune-toggle:hover {
+  color: var(--ink);
+}
+
+.repair-tune-badge {
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.repair-tune-chevron {
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.repair-tune {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.repair-hum {
+  max-width: none;
+}
+
+.repair-tune-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 18px;
+  align-items: end;
+}
+
+.repair-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.repair-slider-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.repair-slider-head output {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.repair-slider input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.repair-toggles {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
+
+.repair-toggles .toggle-row:first-child {
+  border-top: 0;
+}
+
+.repair-tune-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.repair-tune-foot p {
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+/* Before/after numbers make the repair auditable, not just audible. */
+.repair-levels {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 11.5px;
+}
+
+.repair-level-row {
+  display: grid;
+  grid-template-columns: minmax(74px, 1.4fr) repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 3px 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+
+.repair-level-row + .repair-level-row {
+  border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+
+.repair-level-head {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--faint);
+}
+
+.repair-level-head span:first-child {
+  text-align: left;
+}
+
+.repair-level-name {
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .storage-panel {
@@ -3524,6 +3669,10 @@ p {
 
   .job-strip-panel .progress-card {
     padding: 16px 16px 20px;
+  }
+
+  .repair-tune-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .content {

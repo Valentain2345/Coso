@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'vitest';
 import {
   concatFloat32,
+  deEsser,
   detectSpeechSegments,
   encodeWav,
   encodeWavBytes,
+  goertzelPower,
   highPass,
+  noiseGate,
   normalizePeak,
   peak,
   resample,
@@ -396,5 +399,122 @@ describe('array helpers', () => {
     expect(rms(new Float32Array(0))).toBe(0);
     expect(peak(input)).toBe(4);
     expect(peak(new Float32Array(0))).toBe(0);
+  });
+});
+
+/* ------------------------------------------------------------ goertzelPower */
+
+describe('goertzelPower', () => {
+  test('measures a pure tone and ignores a distant frequency', () => {
+    const tone = makeSine(440, SAMPLE_RATE, 2, 0.5);
+    const onTone = goertzelPower(tone, SAMPLE_RATE, 440);
+    const offTone = goertzelPower(tone, SAMPLE_RATE, 600);
+
+    // A sine of amplitude A has A² / 4 of power in its own bin.
+    expect(onTone).toBeCloseTo(0.0625, 2);
+    expect(offTone).toBeLessThan(onTone * 1e-3);
+  });
+
+  test('rejects invalid frequencies and empty input', () => {
+    const tone = makeSine(440, SAMPLE_RATE, 0.5);
+    expect(goertzelPower(tone, SAMPLE_RATE, 0)).toBe(0);
+    expect(goertzelPower(tone, SAMPLE_RATE, SAMPLE_RATE / 2)).toBe(0);
+    expect(goertzelPower(tone, 0, 440)).toBe(0);
+    expect(goertzelPower(new Float32Array(0), SAMPLE_RATE, 440)).toBe(0);
+  });
+});
+
+/* ------------------------------------------------------------------ deEsser */
+
+describe('deEsser', () => {
+  test('turns down a loud sibilant band and keeps the vowel body', () => {
+    const length = SAMPLE_RATE * 2;
+    const input = new Float32Array(length);
+    for (let i = 0; i < length; i += 1) {
+      const t = i / SAMPLE_RATE;
+      input[i] = 0.3 * Math.sin(2 * Math.PI * 200 * t) + 0.3 * Math.sin(2 * Math.PI * 6500 * t);
+    }
+
+    const output = deEsser(input, SAMPLE_RATE, { maxReductionDb: 6 });
+    const highBefore = rms(highPass(input, SAMPLE_RATE, 4500), SAMPLE_RATE / 2, length);
+    const highAfter = rms(highPass(output, SAMPLE_RATE, 4500), SAMPLE_RATE / 2, length);
+    expect(highAfter).toBeLessThan(highBefore * 0.8);
+
+    // The 200 Hz body is untouched within 2 %.
+    const bodyBefore = goertzelPower(input.subarray(SAMPLE_RATE), SAMPLE_RATE, 200);
+    const bodyAfter = goertzelPower(output.subarray(SAMPLE_RATE), SAMPLE_RATE, 200);
+    expect(bodyAfter / bodyBefore).toBeGreaterThan(0.98);
+    expect(bodyAfter / bodyBefore).toBeLessThan(1.02);
+  });
+
+  test('passes audio through when the high band is quiet', () => {
+    const length = SAMPLE_RATE;
+    const input = new Float32Array(length);
+    for (let i = 0; i < length; i += 1) {
+      const t = i / SAMPLE_RATE;
+      input[i] = 0.4 * Math.sin(2 * Math.PI * 200 * t) + 0.005 * Math.sin(2 * Math.PI * 6500 * t);
+    }
+    const output = deEsser(input, SAMPLE_RATE, { maxReductionDb: 6 });
+    let largestDifference = 0;
+    for (let i = 0; i < length; i += 1) {
+      largestDifference = Math.max(largestDifference, Math.abs(output[i] - input[i]));
+    }
+    expect(largestDifference).toBeLessThan(1e-6);
+  });
+
+  test('is a passthrough for zero reduction and empty input', () => {
+    const input = makeSine(6500, SAMPLE_RATE, 0.25, 0.2);
+    expect(Array.from(deEsser(input, SAMPLE_RATE, { maxReductionDb: 0 }))).toEqual(
+      Array.from(input),
+    );
+    expect(deEsser(new Float32Array(0), SAMPLE_RATE).length).toBe(0);
+  });
+});
+
+/* ----------------------------------------------------------------- noiseGate */
+
+describe('noiseGate', () => {
+  /** Alternating loud and quiet seconds, so the gate has something to close on. */
+  function alternating(seconds = 4): Float32Array {
+    const out = new Float32Array(SAMPLE_RATE * seconds);
+    for (let i = 0; i < out.length; i += 1) {
+      const phase = (i / SAMPLE_RATE) % 1;
+      const amplitude = phase < 0.5 ? 0.3 : 0.002;
+      out[i] = amplitude * Math.sin((2 * Math.PI * 440 * i) / SAMPLE_RATE);
+    }
+    return out;
+  }
+
+  test('attenuates gaps and leaves speech-level passages alone', () => {
+    const input = alternating();
+    const output = noiseGate(input, SAMPLE_RATE, { rangeDb: -30, depthDb: 12 });
+
+    const quietBefore = rms(input, Math.round(SAMPLE_RATE * 0.6), Math.round(SAMPLE_RATE * 0.9));
+    const quietAfter = rms(output, Math.round(SAMPLE_RATE * 0.6), Math.round(SAMPLE_RATE * 0.9));
+    expect(quietAfter).toBeLessThan(quietBefore * 0.4);
+
+    // 1.15 s leaves the release enough time to open after the burst starts.
+    const loudBefore = rms(input, Math.round(SAMPLE_RATE * 1.15), Math.round(SAMPLE_RATE * 1.45));
+    const loudAfter = rms(output, Math.round(SAMPLE_RATE * 1.15), Math.round(SAMPLE_RATE * 1.45));
+    expect(loudAfter / loudBefore).toBeGreaterThan(0.9);
+  });
+
+  test('never amplifies and never fully mutes', () => {
+    const input = alternating();
+    const output = noiseGate(input, SAMPLE_RATE, { rangeDb: -24, depthDb: 40 });
+    let highest = 0;
+    for (let i = 0; i < output.length; i += 1) {
+      highest = Math.max(highest, Math.abs(output[i] / (input[i] || 1)));
+    }
+    expect(highest).toBeLessThanOrEqual(1 + 1e-6);
+
+    const quietAfter = rms(output, Math.round(SAMPLE_RATE * 0.6), Math.round(SAMPLE_RATE * 0.9));
+    expect(quietAfter).toBeGreaterThan(0); // depth is capped in practice, not a hard mute
+  });
+
+  test('leaves silence and empty input untouched', () => {
+    const silence = new Float32Array(SAMPLE_RATE);
+    expect(peak(noiseGate(silence, SAMPLE_RATE))).toBe(0);
+    expect(noiseGate(new Float32Array(0), SAMPLE_RATE).length).toBe(0);
   });
 });

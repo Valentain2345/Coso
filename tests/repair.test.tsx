@@ -14,6 +14,7 @@ import {
   AudioRepairDialog,
   REPAIR_PREVIEW_SECONDS,
 } from '../src/components/AudioRepairDialog';
+import { REPAIR_PRESETS } from '../src/lib/audio/enhance';
 
 const SAMPLE_RATE = 16000;
 
@@ -89,8 +90,9 @@ describe('AudioRepairDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: /Apply and use/i }));
 
     await waitFor(() => expect(onApply).toHaveBeenCalledTimes(1));
-    const [blob, preset] = onApply.mock.calls[0];
+    const [blob, options, preset] = onApply.mock.calls[0];
     expect(preset).toBe('far');
+    expect(options).toEqual(REPAIR_PRESETS.far);
     expect(blob).toBeInstanceOf(Blob);
     expect(blob.type).toBe('audio/wav');
 
@@ -136,5 +138,101 @@ describe('AudioRepairDialog', () => {
     (window.HTMLMediaElement.prototype.pause as ReturnType<typeof vi.fn>).mockClear();
     fireEvent.click(screen.getByRole('radio', { name: /Clean/ }));
     expect(window.HTMLMediaElement.prototype.pause).toHaveBeenCalled();
+  });
+
+  it('keeps fine tuning collapsed until asked', async () => {
+    render(
+      <AudioRepairDialog open source={source()} sourceName={null} onApply={() => {}} onClose={() => {}} />,
+    );
+
+    await screen.findByRole('radio', { name: /Clear/ });
+    expect(screen.queryByLabelText('Mains hum')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Fine-tune/ }));
+    expect(screen.getByRole('combobox', { name: 'Mains hum' })).toBeTruthy();
+    expect(screen.getByRole('slider', { name: 'Noise reduction' })).toBeTruthy();
+    expect(screen.getByRole('slider', { name: 'Sibilance' })).toBeTruthy();
+    expect(screen.getByRole('slider', { name: 'Clarity' })).toBeTruthy();
+    expect(screen.getByRole('slider', { name: 'Warmth' })).toBeTruthy();
+    expect(screen.getByRole('switch', { name: 'Quiet the gaps' })).toBeTruthy();
+    expect(screen.getByRole('switch', { name: 'Even out levels' })).toBeTruthy();
+  });
+
+  it('applies a fine-tuned custom profile with the inherited preset values', async () => {
+    const onApply = vi.fn();
+    render(
+      <AudioRepairDialog open source={source()} sourceName={null} onApply={onApply} onClose={() => {}} />,
+    );
+
+    await screen.findByRole('radio', { name: /Clear/ });
+    fireEvent.click(screen.getByRole('radio', { name: /Clean/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Fine-tune/ }));
+    fireEvent.change(screen.getByRole('slider', { name: 'Clarity' }), { target: { value: '6' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Mains hum' }), {
+      target: { value: '60' },
+    });
+    fireEvent.click(screen.getByRole('switch', { name: 'Quiet the gaps' }));
+
+    // The preset grid no longer claims a built-in profile.
+    expect(screen.getByText('Custom')).toBeTruthy();
+    expect(screen.getByRole('radio', { name: /Clean/ }).getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(screen.getByRole('button', { name: /Apply and use/i }));
+    await waitFor(() => expect(onApply).toHaveBeenCalledTimes(1));
+    const [, options, preset] = onApply.mock.calls[0];
+    expect(preset).toBe('custom');
+    expect(options.presenceDb).toBe(6);
+    expect(options.hum).toBe('60');
+    expect(options.gate).toBe(true);
+    // Everything the user did not touch still comes from the Clean preset.
+    expect(options.denoiseStrength).toBe(REPAIR_PRESETS.clean.denoiseStrength);
+    expect(options.targetRmsDb).toBe(REPAIR_PRESETS.clean.targetRmsDb);
+  });
+
+  it('resets the fine tuning back to the preset it started from', async () => {
+    render(
+      <AudioRepairDialog open source={source()} sourceName={null} onApply={() => {}} onClose={() => {}} />,
+    );
+
+    await screen.findByRole('radio', { name: /Clear/ });
+    fireEvent.click(screen.getByRole('button', { name: /Fine-tune/ }));
+    fireEvent.change(screen.getByRole('slider', { name: 'Clarity' }), { target: { value: '7' } });
+    fireEvent.click(screen.getByRole('button', { name: /Back to Clear/ }));
+
+    expect(screen.getByRole('radio', { name: /Clear/ }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.queryByText('Custom')).toBeNull();
+  });
+
+  it('will not apply a custom profile that changes nothing', async () => {
+    render(
+      <AudioRepairDialog open source={source()} sourceName={null} onApply={() => {}} onClose={() => {}} />,
+    );
+
+    fireEvent.click(await screen.findByRole('radio', { name: /Original/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Fine-tune/ }));
+    const gate = screen.getByRole('switch', { name: 'Quiet the gaps' });
+    fireEvent.click(gate);
+    fireEvent.click(gate);
+
+    expect(screen.getByText(/Nothing is being changed yet/)).toBeTruthy();
+    expect(
+      (screen.getByRole('button', { name: /Apply and use/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it('shows the measured noise floor, average and peak for both versions', async () => {
+    render(
+      <AudioRepairDialog open source={source()} sourceName={null} onApply={() => {}} onClose={() => {}} />,
+    );
+
+    await screen.findByRole('radio', { name: /Clear/ });
+    const meter = await screen.findByRole('group', { name: 'Before and after measurements' });
+    expect(meter.textContent).toContain('Noise floor');
+    expect(meter.textContent).toContain('Average');
+    expect(meter.textContent).toContain('Peak');
+    expect(meter.textContent).toContain('Repaired');
+    // Values are rendered in dBFS; the original test tone peaks near -14 dB.
+    expect(meter.textContent).toContain('-14 dB');
+    expect(meter.textContent).toMatch(/-?\d+ dB/);
   });
 });

@@ -8,7 +8,7 @@ import type {
   Settings,
 } from '../types';
 import { LANGUAGES, MODELS, spokenLanguageLabel } from '../lib/models';
-import { REPAIR_PRESETS, type RepairPresetId } from '../lib/audio/enhance';
+import { REPAIR_PROFILE_IDS, type RepairProfileId, type RepairPresetId } from '../lib/audio/enhance';
 import { useI18n } from '../i18n';
 import { Modal } from './ui/Modal';
 
@@ -18,8 +18,8 @@ interface Props {
   open: boolean;
   mode: QuickSettingsMode;
   settings: Settings;
-  /** Audio repair preset applied before re-transcribing an existing session. */
-  repair?: RepairPresetId;
+  /** Audio repair profile applied before re-transcribing an existing session. */
+  repair?: RepairProfileId;
   busy?: boolean;
   onChange: (patch: Partial<Settings>) => void;
   onRepairChange?: (preset: RepairPresetId) => void;
@@ -140,7 +140,12 @@ export const QuickSettingsDialog: React.FC<Props> = ({
               value={repair}
               onChange={(event) => onRepairChange(event.target.value as RepairPresetId)}
             >
-              {(Object.keys(REPAIR_PRESETS) as RepairPresetId[]).map((id) => (
+              {repair === 'custom' && (
+                <option value="custom">
+                  {t('repair.preset.custom')} — {t('repair.preset.custom.note')}
+                </option>
+              )}
+              {REPAIR_PROFILE_IDS.map((id) => (
                 <option key={id} value={id}>
                   {t(`repair.preset.${id}`)} — {t(`repair.preset.${id}.note`)}
                 </option>

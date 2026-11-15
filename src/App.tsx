@@ -40,7 +40,13 @@ import { applyReprocess } from './lib/session';
 import { JobQueue, type QueueSummary } from './lib/jobQueue';
 import { notifyTranscriptionReady, prepareNotifications } from './lib/notify';
 import { describeQueueCompletion } from './lib/queueNotice';
-import { repairAudio, type RepairPresetId } from './lib/audio/enhance';
+import {
+  REPAIR_PRESETS,
+  repairAudio,
+  type RepairOptions,
+  type RepairPresetId,
+  type RepairProfileId,
+} from './lib/audio/enhance';
 import type { JobState, SessionMeta, TranscriptSegment } from './types';
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024 * 1024;
@@ -80,7 +86,10 @@ const App: React.FC = () => {
   const [pendingReplaceId, setPendingReplaceId] = useState<string | null>(null);
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickMode, setQuickMode] = useState<'preview' | 'reprocess'>('preview');
-  const [quickRepair, setQuickRepair] = useState<RepairPresetId>('off');
+  const [quickRepair, setQuickRepair] = useState<{
+    preset: RepairProfileId;
+    options: RepairOptions;
+  }>(() => ({ preset: 'off', options: { ...REPAIR_PRESETS.off } }));
   const [repairOpen, setRepairOpen] = useState(false);
   const [repairBusy, setRepairBusy] = useState(false);
   const [storage, setStorage] = useState<{ usage: number; quota: number } | null>(null);
@@ -621,7 +630,7 @@ const App: React.FC = () => {
     const session = store.current;
     if (!session?.audioBlob || repairBusy) return;
     const original = session.audioBlob;
-    if (quickRepair === 'off') {
+    if (quickRepair.preset === 'off') {
       setQuickOpen(false);
       void beginTranscription(
         { blob: original, name: session.sourceName },
@@ -634,7 +643,7 @@ const App: React.FC = () => {
     // The dialog stays open (with a spinner) so a long DSP pass does not look
     // like a frozen app, and it closes as soon as the repair is handed over.
     setRepairBusy(true);
-    void repairAudio(original, quickRepair)
+    void repairAudio(original, quickRepair.options)
       .then(({ blob }) => {
         setRepairBusy(false);
         setQuickOpen(false);
@@ -659,7 +668,11 @@ const App: React.FC = () => {
       });
   };
 
-  const handleRepairApply = (blob: Blob, preset: RepairPresetId) => {
+  const handleRepairApply = (
+    blob: Blob,
+    options: RepairOptions,
+    preset: RepairProfileId,
+  ) => {
     setPendingSource((current) =>
       current
         ? {
@@ -672,8 +685,12 @@ const App: React.FC = () => {
         : current,
     );
     setRepairOpen(false);
-    setQuickRepair(preset);
+    setQuickRepair({ preset, options });
     push(t('toast.repaired.title'), 'success', t('toast.repaired.desc'));
+  };
+
+  const handleRepairPresetChange = (preset: RepairPresetId) => {
+    setQuickRepair({ preset, options: { ...REPAIR_PRESETS[preset] } });
   };
 
   const handleClearAll = async () => {
@@ -858,10 +875,10 @@ const App: React.FC = () => {
         open={quickOpen}
         mode={quickMode}
         settings={settings}
-        repair={quickRepair}
+        repair={quickRepair.preset}
         busy={transcription.running || repairBusy}
         onChange={setSettings}
-        onRepairChange={setQuickRepair}
+        onRepairChange={handleRepairPresetChange}
         onStart={handleQuickStart}
         onClose={() => setQuickOpen(false)}
       />

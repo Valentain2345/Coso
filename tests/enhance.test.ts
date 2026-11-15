@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { goertzelPower } from '../src/lib/audio/dsp';
 import {
   REPAIR_PRESETS,
   compress,
+  detectHum,
   highShelf,
+  humNotch,
+  isRepairNoop,
   limitPeak,
+  lowShelf,
+  measureAudio,
   normaliseRms,
+  notch,
   peakingEq,
   repairSamples,
 } from '../src/lib/audio/enhance';
@@ -149,6 +156,135 @@ describe('highShelf', () => {
   });
 });
 
+/* -------------------------------------------------------------- lowShelf */
+
+describe('lowShelf', () => {
+  it('adds body below the corner without lifting treble', () => {
+    const low = sine(100, 2, 0.1);
+    const high = sine(4000, 2, 0.1);
+    const lowRatio = steadyRms(lowShelf(low, SAMPLE_RATE, 180, 6)) / steadyRms(low);
+    const highRatio = steadyRms(lowShelf(high, SAMPLE_RATE, 180, 6)) / steadyRms(high);
+    expect(lowRatio).toBeGreaterThan(1.5);
+    expect(highRatio).toBeGreaterThan(0.98);
+    expect(highRatio).toBeLessThan(1.02);
+  });
+
+  it('is a passthrough for zero gain', () => {
+    const input = sine(100, 0.25);
+    expect(Array.from(lowShelf(input, SAMPLE_RATE, 180, 0))).toEqual(Array.from(input));
+  });
+});
+
+/* ----------------------------------------------------------------- notch */
+
+describe('notch', () => {
+  it('removes a narrow tone while keeping nearby speech', () => {
+    const hum = sine(50, 2, 0.5);
+    const input = new Float32Array(hum.length);
+    const voice = sine(440, 2, 0.2);
+    for (let i = 0; i < input.length; i += 1) input[i] = hum[i] + voice[i];
+
+    const output = notch(input, SAMPLE_RATE, 50, 15);
+    const humBefore = goertzelPower(input, SAMPLE_RATE, 50);
+    const humAfter = goertzelPower(output, SAMPLE_RATE, 50);
+    expect(humAfter).toBeLessThan(humBefore * 0.01);
+
+    const voiceBefore = goertzelPower(input, SAMPLE_RATE, 440);
+    const voiceAfter = goertzelPower(output, SAMPLE_RATE, 440);
+    expect(voiceAfter / voiceBefore).toBeGreaterThan(0.95);
+    expect(voiceAfter / voiceBefore).toBeLessThan(1.05);
+  });
+
+  it('is a passthrough outside the audio band or with no input', () => {
+    const input = sine(440, 0.25);
+    expect(Array.from(notch(input, SAMPLE_RATE, 9000, 15))).toEqual(Array.from(input));
+    expect(notch(new Float32Array(0), SAMPLE_RATE, 50).length).toBe(0);
+  });
+});
+
+/* ----------------------------------------------------------- hum detection */
+
+describe('detectHum', () => {
+  function withNoise(frequency: number): Float32Array {
+    const tone = sine(frequency, 3, 0.05);
+    const noise = whiteNoise(tone.length, 0.02);
+    for (let i = 0; i < tone.length; i += 1) tone[i] += noise[i];
+    return tone;
+  }
+
+  it('recognises a 50 Hz line and a 60 Hz line', () => {
+    expect(detectHum(withNoise(50), SAMPLE_RATE)).toBe(50);
+    expect(detectHum(withNoise(60), SAMPLE_RATE)).toBe(60);
+  });
+
+  it('does not mistake noise or a voice for mains hum', () => {
+    expect(detectHum(whiteNoise(SAMPLE_RATE * 3, 0.03), SAMPLE_RATE)).toBe(0);
+    expect(detectHum(sine(220, 3, 0.3), SAMPLE_RATE)).toBe(0);
+    expect(detectHum(new Float32Array(100), SAMPLE_RATE)).toBe(0);
+  });
+});
+
+describe('humNotch', () => {
+  it('removes the fundamental and its first two harmonics on auto', () => {
+    const length = SAMPLE_RATE * 3;
+    const input = new Float32Array(length);
+    const tones = [60, 120, 180].map((frequency) => sine(frequency, 3, 0.05));
+    const voice = sine(1000, 3, 0.2);
+    const noise = whiteNoise(length, 0.01);
+    for (let i = 0; i < length; i += 1) {
+      input[i] = tones[0][i] + tones[1][i] + tones[2][i] + voice[i] + noise[i];
+    }
+
+    expect(detectHum(input, SAMPLE_RATE)).toBe(60);
+    const output = humNotch(input, SAMPLE_RATE, 'auto');
+    for (const frequency of [60, 120, 180]) {
+      const before = goertzelPower(input, SAMPLE_RATE, frequency);
+      const after = goertzelPower(output, SAMPLE_RATE, frequency);
+      expect(after, `${frequency} Hz survived`).toBeLessThan(before * 0.02);
+    }
+    const voiceBefore = goertzelPower(input, SAMPLE_RATE, 1000);
+    const voiceAfter = goertzelPower(output, SAMPLE_RATE, 1000);
+    expect(voiceAfter / voiceBefore).toBeGreaterThan(0.95);
+  });
+
+  it('is a passthrough when off or when auto finds nothing', () => {
+    const input = sine(440, 1, 0.2);
+    expect(Array.from(humNotch(input, SAMPLE_RATE, 'off'))).toEqual(Array.from(input));
+    expect(Array.from(humNotch(input, SAMPLE_RATE, 'auto'))).toEqual(Array.from(input));
+  });
+});
+
+/* ---------------------------------------------------------- measureAudio */
+
+describe('measureAudio', () => {
+  it('reports duration, average, peak and the noise floor in dBFS', () => {
+    const level = measureAudio(sine(440, 2, 0.1), SAMPLE_RATE);
+    expect(level.durationSeconds).toBe(2);
+    expect(level.rmsDb).toBeCloseTo(-23, 0);
+    expect(level.peakDb).toBeCloseTo(-20, 0);
+    expect(level.noiseFloorDb).toBeGreaterThan(-30);
+  });
+
+  it('clamps digital silence to -100 dB', () => {
+    expect(measureAudio(new Float32Array(SAMPLE_RATE), SAMPLE_RATE)).toEqual({
+      durationSeconds: 1,
+      rmsDb: -100,
+      peakDb: -100,
+      noiseFloorDb: -100,
+    });
+  });
+});
+
+describe('isRepairNoop', () => {
+  it('is true only when no stage would change the audio', () => {
+    expect(isRepairNoop(REPAIR_PRESETS.off)).toBe(true);
+    expect(isRepairNoop({ ...REPAIR_PRESETS.off, gate: true })).toBe(false);
+    expect(isRepairNoop({ ...REPAIR_PRESETS.off, hum: 'auto' })).toBe(false);
+    expect(isRepairNoop({ ...REPAIR_PRESETS.off, normalise: true })).toBe(false);
+    expect(isRepairNoop(REPAIR_PRESETS.clear)).toBe(false);
+  });
+});
+
 /* --------------------------------------------------------------- compress */
 
 describe('compress', () => {
@@ -227,7 +363,7 @@ describe('repairSamples', () => {
 
   it('removes the DC offset and room rumble on every active preset', () => {
     const input = dc(1);
-    for (const id of ['clean', 'clear', 'far'] as const) {
+    for (const id of ['clean', 'clear', 'noisy', 'far'] as const) {
       const output = repairSamples(input, SAMPLE_RATE, REPAIR_PRESETS[id]);
       const mean = output.reduce((sum, value) => sum + value, 0) / output.length;
       expect(Math.abs(mean)).toBeLessThan(0.02);
@@ -241,26 +377,57 @@ describe('repairSamples', () => {
     expect(peak(output)).toBeLessThanOrEqual(0.98 + 1e-6);
   });
 
-  it('is monotonic in strength across presets', () => {
-    const order = ['off', 'clean', 'clear', 'far'] as const;
+  it('detects and removes mains hum in the middle of a voice', () => {
+    const voice = speechLike(3, 0.05);
+    const hum = sine(50, 3, 0.03);
+    const input = new Float32Array(voice.length);
+    for (let i = 0; i < input.length; i += 1) input[i] = voice[i] + hum[i];
+
+    const humBefore = goertzelPower(input, SAMPLE_RATE, 50);
+    const output = repairSamples(input, SAMPLE_RATE, REPAIR_PRESETS.clear);
+    const humAfter = goertzelPower(output, SAMPLE_RATE, 50);
+    expect(humAfter).toBeLessThan(humBefore * 0.1);
+    expect(peak(output)).toBeLessThanOrEqual(0.98 + 1e-6);
+  });
+
+  it('is monotonic in tone shaping across presets', () => {
+    const order = ['off', 'clean', 'clear', 'noisy', 'far'] as const;
     for (let i = 1; i < order.length; i += 1) {
       const previous = REPAIR_PRESETS[order[i - 1]];
       const current = REPAIR_PRESETS[order[i]];
       expect(current.highPassHz).toBeGreaterThanOrEqual(previous.highPassHz);
-      expect(current.denoiseStrength).toBeGreaterThanOrEqual(previous.denoiseStrength);
       expect(current.presenceDb).toBeGreaterThanOrEqual(previous.presenceDb);
       expect(current.airDb).toBeGreaterThanOrEqual(previous.airDb);
       expect(current.boomCutDb).toBeLessThanOrEqual(previous.boomCutDb);
     }
-    // The three active presets get progressively louder and more compressed.
+    // Denoise peaks on "noisy": constant background noise is its whole point.
+    expect(REPAIR_PRESETS.noisy.denoiseStrength).toBeGreaterThan(
+      REPAIR_PRESETS.clear.denoiseStrength,
+    );
+    expect(REPAIR_PRESETS.noisy.denoiseStrength).toBeGreaterThan(
+      REPAIR_PRESETS.far.denoiseStrength,
+    );
+    // The active presets get progressively louder and more compressed.
     expect(REPAIR_PRESETS.clean.targetRmsDb).toBeLessThan(REPAIR_PRESETS.clear.targetRmsDb);
-    expect(REPAIR_PRESETS.clear.targetRmsDb).toBeLessThan(REPAIR_PRESETS.far.targetRmsDb);
+    expect(REPAIR_PRESETS.clear.targetRmsDb).toBeLessThan(REPAIR_PRESETS.noisy.targetRmsDb);
+    expect(REPAIR_PRESETS.noisy.targetRmsDb).toBeLessThan(REPAIR_PRESETS.far.targetRmsDb);
     expect(REPAIR_PRESETS.clean.thresholdDb).toBeGreaterThan(REPAIR_PRESETS.clear.thresholdDb);
-    expect(REPAIR_PRESETS.clear.thresholdDb).toBeGreaterThan(REPAIR_PRESETS.far.thresholdDb);
+    expect(REPAIR_PRESETS.clear.thresholdDb).toBeGreaterThan(REPAIR_PRESETS.noisy.thresholdDb);
+    expect(REPAIR_PRESETS.noisy.thresholdDb).toBeGreaterThan(REPAIR_PRESETS.far.thresholdDb);
     expect(REPAIR_PRESETS.clean.ratio).toBeLessThanOrEqual(REPAIR_PRESETS.far.ratio);
     expect(REPAIR_PRESETS.clean.compress).toBe(false);
     expect(REPAIR_PRESETS.clear.compress).toBe(true);
+    expect(REPAIR_PRESETS.noisy.compress).toBe(true);
     expect(REPAIR_PRESETS.far.compress).toBe(true);
+    // Hum handling and de-essing are on for every active preset.
+    for (const id of ['clean', 'clear', 'noisy', 'far'] as const) {
+      expect(REPAIR_PRESETS[id].hum).toBe('auto');
+      expect(REPAIR_PRESETS[id].deEssDb).toBeGreaterThan(0);
+    }
+    expect(REPAIR_PRESETS.clean.gate).toBe(false);
+    expect(REPAIR_PRESETS.clear.gate).toBe(true);
+    expect(REPAIR_PRESETS.noisy.gate).toBe(true);
+    expect(REPAIR_PRESETS.far.gate).toBe(true);
   });
 
   it('never produces NaN, Infinity or out-of-range samples', () => {
@@ -303,7 +470,7 @@ describe('repair chain on real speech', () => {
 
   it('improves the signal-to-noise ratio by more than 2x', () => {
     const before = snr(noisy);
-    for (const id of ['clean', 'clear', 'far'] as const) {
+    for (const id of ['clean', 'clear', 'noisy', 'far'] as const) {
       const repaired = repairSamples(noisy, SAMPLE_RATE, REPAIR_PRESETS[id]);
       expect(repaired.length).toBe(noisy.length);
       expect(snr(repaired), `${id} left too much hiss`).toBeLessThan(before * 0.5);

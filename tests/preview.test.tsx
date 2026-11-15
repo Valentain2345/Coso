@@ -5,6 +5,7 @@ import React from 'react';
 import { PreviewCard, PREVIEW_SECONDS } from '../src/components/PreviewCard';
 import { QuickSettingsDialog } from '../src/components/QuickSettingsDialog';
 import { LONG_PREVIEW_SECONDS, previewSecondsFor } from '../src/lib/preview';
+import { REPAIR_PROFILE_IDS } from '../src/lib/audio/enhance';
 import { setLang } from '../src/i18n';
 import type { Settings } from '../src/types';
 import type { TranscribeSource } from '../src/hooks/useTranscription';
@@ -319,6 +320,28 @@ describe('QuickSettingsDialog', () => {
     );
     fireEvent.change(screen.getByLabelText('Audio repair'), { target: { value: 'far' } });
     expect(onRepairChange).toHaveBeenCalledWith('far');
-    expect((screen.getByLabelText('Audio repair') as HTMLSelectElement).options.length).toBe(4);
+    expect((screen.getByLabelText('Audio repair') as HTMLSelectElement).options.length).toBe(
+      REPAIR_PROFILE_IDS.length,
+    );
+  });
+
+  it('shows a fine-tuned custom profile instead of losing it', () => {
+    render(
+      <QuickSettingsDialog
+        open
+        mode="reprocess"
+        settings={settings()}
+        repair="custom"
+        onChange={() => {}}
+        onRepairChange={() => {}}
+        onStart={() => {}}
+        onClose={() => {}}
+      />,
+    );
+
+    const select = screen.getByLabelText('Audio repair') as HTMLSelectElement;
+    expect(select.value).toBe('custom');
+    expect(select.options.length).toBe(REPAIR_PROFILE_IDS.length + 1);
+    expect(select.selectedOptions[0].textContent).toContain('Custom');
   });
 });

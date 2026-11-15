@@ -24,6 +24,26 @@ export interface VadOptions {
   thresholdFactor?: number;
 }
 
+export interface DeEsserOptions {
+  /** Start of the sibilance band in Hz. */
+  frequencyHz?: number;
+  /** High-band / full-band ratio where reduction starts (0..1). */
+  threshold?: number;
+  /** Deepest reduction the de-esser may apply, in dB. */
+  maxReductionDb?: number;
+  attackMs?: number;
+  releaseMs?: number;
+}
+
+export interface NoiseGateOptions {
+  /** How far below the speech level the gate closes, in dB (<= 0). */
+  rangeDb?: number;
+  /** Attenuation while the gate is closed, in dB (>= 0). */
+  depthDb?: number;
+  attackMs?: number;
+  releaseMs?: number;
+}
+
 const EPSILON = 1e-12;
 
 function isFiniteNumber(value: number): boolean {
@@ -909,4 +929,208 @@ export function peak(input: Float32Array): number {
     }
   }
   return maximum;
+}
+
+/**
+ * Single-bin DFT power at one frequency, Hann-windowed and normalised so a pure
+ * sine of amplitude A reads A² / 4 regardless of length.
+ *
+ * Used to measure narrow tones (mains hum) without paying for a full spectrum.
+ */
+export function goertzelPower(
+  input: Float32Array,
+  sampleRate: number,
+  frequencyHz: number,
+): number {
+  const length = input.length;
+  if (
+    length === 0 ||
+    !isFiniteNumber(sampleRate) ||
+    sampleRate <= 0 ||
+    !isFiniteNumber(frequencyHz) ||
+    frequencyHz <= 0 ||
+    frequencyHz >= sampleRate / 2
+  ) {
+    return 0;
+  }
+
+  const coefficient = 2 * Math.cos((2 * Math.PI * frequencyHz) / sampleRate);
+  let previous = 0;
+  let previousPrevious = 0;
+  let windowSum = 0;
+
+  for (let i = 0; i < length; i++) {
+    const window = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / length);
+    windowSum += window;
+    const sample = Number.isFinite(input[i]) ? input[i] * window : 0;
+    const current = sample + coefficient * previous - previousPrevious;
+    previousPrevious = previous;
+    previous = current;
+  }
+
+  if (windowSum <= EPSILON) return 0;
+  const power =
+    previous * previous +
+    previousPrevious * previousPrevious -
+    coefficient * previous * previousPrevious;
+  return Math.max(0, power) / (windowSum * windowSum);
+}
+
+/**
+ * Split-band de-esser.
+ *
+ * Sibilance ("s", "sh") is a burst of high-frequency energy that is loud
+ * relative to the rest of the voice. Measuring that ratio instead of an
+ * absolute level keeps the effect working on quiet far-field recordings too.
+ * Only the high band is attenuated, so vowels keep their body.
+ */
+export function deEsser(
+  input: Float32Array,
+  sampleRate: number,
+  options: DeEsserOptions = {},
+): Float32Array {
+  if (input.length === 0 || !isFiniteNumber(sampleRate) || sampleRate <= 0) {
+    return new Float32Array(input);
+  }
+
+  const frequency = Math.min(
+    options.frequencyHz ?? 4500,
+    sampleRate * 0.5 * 0.9,
+  );
+  const threshold = Math.min(0.95, Math.max(0.05, options.threshold ?? 0.42));
+  const maxReductionDb = Math.max(0, options.maxReductionDb ?? 6);
+  if (maxReductionDb === 0 || frequency <= 0) {
+    return new Float32Array(input);
+  }
+
+  const attack = Math.exp(-1 / ((options.attackMs ?? 1) / 1000 * sampleRate));
+  const release = Math.exp(-1 / ((options.releaseMs ?? 35) / 1000 * sampleRate));
+  const high = highPass(input, sampleRate, frequency);
+  const output = new Float32Array(input.length);
+
+  let highEnvelope = 0;
+  let fullEnvelope = 0;
+
+  for (let i = 0; i < input.length; i++) {
+    const full = Math.abs(Number.isFinite(input[i]) ? input[i] : 0);
+    const highMagnitude = Math.abs(high[i]);
+    fullEnvelope =
+      full > fullEnvelope
+        ? attack * fullEnvelope + (1 - attack) * full
+        : release * fullEnvelope + (1 - release) * full;
+    highEnvelope =
+      highMagnitude > highEnvelope
+        ? attack * highEnvelope + (1 - attack) * highMagnitude
+        : release * highEnvelope + (1 - release) * highMagnitude;
+
+    let gain = 1;
+    const ratio = highEnvelope / (fullEnvelope + 1e-9);
+    if (ratio > threshold) {
+      const reduction = Math.min(
+        maxReductionDb,
+        20 * Math.log10(ratio / threshold),
+      );
+      gain = Math.pow(10, -reduction / 20);
+    }
+
+    // Recombine: the subtraction is exact when no reduction is applied, so a
+    // quiet passage passes through bit-for-bit instead of being filtered twice.
+    const low = (Number.isFinite(input[i]) ? input[i] : 0) - high[i];
+    output[i] = finiteOrZero(low + high[i] * gain);
+  }
+
+  return output;
+}
+
+/** Frame RMS values at a fixed hop, used by the gate and level readout. */
+export function frameRms(
+  input: Float32Array,
+  sampleRate: number,
+  frameMs = 20,
+  hopMs = frameMs / 2,
+): Float64Array {
+  if (input.length === 0 || !isFiniteNumber(sampleRate) || sampleRate <= 0) {
+    return new Float64Array(0);
+  }
+  const frame = Math.max(1, Math.round((sampleRate * frameMs) / 1000));
+  const hop = Math.max(1, Math.round((sampleRate * hopMs) / 1000));
+  const count = Math.max(1, Math.ceil(input.length / hop));
+  const out = new Float64Array(count);
+  for (let index = 0; index < count; index++) {
+    const start = index * hop;
+    const end = Math.min(input.length, start + frame);
+    let sum = 0;
+    for (let i = start; i < end; i++) {
+      const sample = input[i];
+      if (Number.isFinite(sample)) sum += sample * sample;
+    }
+    out[index] = Math.sqrt(sum / Math.max(1, end - start));
+  }
+  return out;
+}
+
+function percentileOf(values: Float64Array, fraction: number): number {
+  if (values.length === 0) return 0;
+  const sorted = Array.from(values).sort((a, b) => a - b);
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.floor(fraction * (sorted.length - 1))),
+  );
+  return sorted[index];
+}
+
+/**
+ * Downward expander for the gaps between phrases.
+ *
+ * The threshold follows the recording's own speech level (95th percentile
+ * frame), so a quiet far-field file is gated relative to its own voice rather
+ * than to an absolute level. Reduction is capped by `depthDb` and never mutes
+ * completely, which keeps Whisper from inventing words in dead air.
+ */
+export function noiseGate(
+  input: Float32Array,
+  sampleRate: number,
+  options: NoiseGateOptions = {},
+): Float32Array {
+  if (input.length === 0 || !isFiniteNumber(sampleRate) || sampleRate <= 0) {
+    return new Float32Array(input);
+  }
+
+  const rangeDb = Math.min(0, options.rangeDb ?? -30);
+  const depthDb = Math.max(0, options.depthDb ?? 12);
+  if (depthDb === 0) return new Float32Array(input);
+
+  const frame = Math.max(1, Math.round(sampleRate * 0.02));
+  const hop = Math.max(1, Math.round(frame / 2));
+  const levels = frameRms(input, sampleRate);
+  const speechLevel = percentileOf(levels, 0.95);
+  if (speechLevel <= 1e-7) return new Float32Array(input);
+
+  const threshold = speechLevel * Math.pow(10, rangeDb / 20);
+  const floorGain = Math.pow(10, -depthDb / 20);
+  const frameSeconds = hop / sampleRate;
+  const attack = Math.exp(-frameSeconds / ((options.attackMs ?? 5) / 1000));
+  const release = Math.exp(-frameSeconds / ((options.releaseMs ?? 120) / 1000));
+
+  // One smoothed gain per frame, then linear interpolation per sample so the
+  // gate never clicks at a frame boundary.
+  const gains = new Float64Array(levels.length);
+  let gain = 1;
+  for (let index = 0; index < levels.length; index++) {
+    const target = levels[index] >= threshold ? 1 : floorGain;
+    const coefficient = target < gain ? attack : release;
+    gain = coefficient * gain + (1 - coefficient) * target;
+    gains[index] = gain;
+  }
+
+  const output = new Float32Array(input.length);
+  for (let i = 0; i < input.length; i++) {
+    const position = i / hop;
+    const index = Math.min(gains.length - 1, Math.floor(position));
+    const next = Math.min(gains.length - 1, index + 1);
+    const fraction = Math.min(1, position - index);
+    const value = gains[index] + (gains[next] - gains[index]) * fraction;
+    output[i] = finiteOrZero(input[i] * value);
+  }
+  return output;
 }
