@@ -156,12 +156,19 @@ describe.skipIf(!hasPage)('download page', () => {
     expect(css).toContain('min-height: 44px');
     expect(css).toContain('@media (pointer: coarse)');
     expect(css).toContain('text-wrap: balance');
+    // Standalone header/footer links keep the full target on touch.
+    expect(css).toMatch(/@media \(pointer: coarse\)[\s\S]*?\.footer-links a \{[\s\S]*?min-height: 44px;/);
+    expect(css).toMatch(/@media \(pointer: coarse\)[\s\S]*?\.brand \{ min-height: 44px; \}/);
   });
 
   it('ships a self-contained 404 page that is not indexed', () => {
     const notFound = readPage('404.html');
     expect(metaOf(notFound).get('robots')).toBe('noindex');
     expect(notFound).toContain('href="/Coso/"');
+    // GitHub Pages serves it for any unknown path, so it cannot rely on a
+    // stylesheet that may resolve elsewhere in the tree.
+    expect(notFound).not.toContain('<link rel="stylesheet"');
+    expect(notFound).toContain('env(safe-area-inset-top');
   });
 });
 

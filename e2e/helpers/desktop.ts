@@ -37,7 +37,26 @@ function killLeftovers(): void {
   }
 }
 
-export async function launchDesktop(): Promise<{ browser: Browser; page: Page }> {
+export async function launchDesktop(attempts = 2): Promise<{ browser: Browser; page: Page }> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await launchOnce();
+    } catch (error) {
+      lastError = error;
+      await closeDesktop();
+      if (attempt < attempts) await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+  }
+  throw lastError;
+}
+
+/**
+ * One launch attempt. A slow or wedged WebView2 can miss the CDP port while a
+ * parallel build hogs the machine, so callers get a retry; a launcher that
+ * exits on its own is reported immediately instead of waiting out the timeout.
+ */
+async function launchOnce(): Promise<{ browser: Browser; page: Page }> {
   if (!fs.existsSync(EXE)) {
     throw new Error(
       `Desktop binary not found at ${EXE}. Run "npx tauri build" first (see README "Desktop app").`,
@@ -52,6 +71,7 @@ export async function launchDesktop(): Promise<{ browser: Browser; page: Page }>
     },
     stdio: 'ignore',
   });
+  const launcher = child;
 
   // Wait for the CDP endpoint to come up.
   const deadline = Date.now() + 60_000;
@@ -61,6 +81,9 @@ export async function launchDesktop(): Promise<{ browser: Browser; page: Page }>
       if (response.ok) break;
     } catch {
       /* not up yet */
+    }
+    if (launcher.exitCode !== null) {
+      throw new Error(`coso.exe exited with code ${launcher.exitCode} during launch`);
     }
     if (Date.now() > deadline) throw new Error('The desktop app did not expose a debugging port');
     await new Promise((resolve) => setTimeout(resolve, 500));

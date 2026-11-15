@@ -30,6 +30,14 @@ scope, so the same build works at the root, under `/Coso/app/`, and inside
 Tauri. Add `https://valentain2345.github.io` as an authorized JavaScript
 origin if Drive should work in the web build.
 
+The site itself is indexed: `index.html` carries a canonical URL, Open Graph
+and Twitter tags, and a JSON-LD `SoftwareApplication` graph; the repository
+also publishes `robots.txt`, `sitemap.xml`, a branded `404.html` and a rendered
+1200x630 social card. Submit `https://valentain2345.github.io/Coso/sitemap.xml`
+once in Google Search Console (Google accepts no other submission path), then
+POST the same URLs to IndexNow for Bing and Yandex after each release. Details
+and the exact request are in the download page's README.
+
 ## Google Drive: one-time setup
 
 Google does **not** allow an app to collect a Google email and password
