@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronUp, Loader2, X } from 'lucide-react';
 import type { ProgressUpdate } from '../types';
 import { useI18n } from '../i18n';
 import { localizeProgress } from '../i18n/progress';
@@ -92,10 +92,19 @@ export const JobStrip: React.FC<Props> = ({
             {expanded ? t('batch.collapseShort') : t('batch.expandShort')}
           </span>
         </button>
-        {/* The expanded card carries its own cancel action. */}
+        {/* The expanded card carries its own cancel action. On phones the label
+            collapses to an icon so the strip stays a single row. */}
         {!expanded && (
-          <button className="btn btn-ghost btn-small job-strip-cancel" onClick={onCancel}>
-            {queued > 0 ? t('common.cancelAll') : t('common.cancel')}
+          <button
+            className="btn btn-ghost btn-small job-strip-cancel"
+            onClick={onCancel}
+            aria-label={queued > 0 ? t('common.cancelAll') : t('common.cancel')}
+            title={queued > 0 ? t('common.cancelAll') : t('common.cancel')}
+          >
+            <X size={16} className="job-strip-cancel-icon" aria-hidden="true" />
+            <span className="job-strip-cancel-text">
+              {queued > 0 ? t('common.cancelAll') : t('common.cancel')}
+            </span>
           </button>
         )}
       </div>

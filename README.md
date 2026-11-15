@@ -110,6 +110,15 @@ node tools/manual-media.mjs   # writes public/manual/*.png and *.gif
   off screen. "Details" opens the step-by-step panel inside the strip and its
   minimise button folds it back. A failure opens that panel with the retry
   action; cancel stops the item in flight and drops the waiting work.
+- **On a phone the strip is the app bar.** It is the topmost surface, so its
+  background runs under the status bar (`env(safe-area-inset-top)`) and it
+  merges with the title bar below into one block with a single hairline
+  instead of two stacked bars. Its own padding never doubles the notch inset,
+  the title bar drops its top inset while the strip is mounted, and the two
+  actions (details, cancel) stay at 44 x 44 px (WCAG 2.5.5). Below 620 px the
+  cancel label collapses to an icon with an accessible name. The details panel
+  is capped at `min(62dvh, 520px)` and scrolls inside the strip, so it can
+  never cover the workspace or push the title bar off screen.
 - **Completion notification.** When a run ends while the app is in the
   background, Coso sends a system notification - the Tauri notification plugin
   on Windows and Android, the Web Notifications API in a browser - with the
@@ -298,13 +307,26 @@ node tools/ui-check.mjs                       # screenshots + performance report
 
 It drives a real transcription, screenshots the status strip on desktop and
 phone widths (including recording while a run is in flight and a "1 queued"
-badge), opens the repair dialog with its fine-tune panel at both widths, and
-writes `test-results/ui/report.json` with startup timings, strip and dialog
-geometry, main-thread busy time, long tasks, frame gaps and JS heap. Latest run:
-39 px strip above the title bar, 0 px horizontal overflow at 390 px, p50/p95
-frame gap 17 ms while scrolling during a run, heap flat at ~10 MB; the repair
-dialog fits 617 px with five presets, five sliders and two switches, and its
-body scrolls inside the panel instead of pushing the footer off-screen.
+badge), emulates a notched phone through CDP
+(`Emulation.setSafeAreaInsetsOverride`, 47 px top inset), opens the repair
+dialog with its fine-tune panel at both widths, and writes
+`test-results/ui/report.json` with startup timings, strip and dialog geometry,
+main-thread busy time, long tasks, frame gaps and JS heap. Latest run: 39 px
+strip above the title bar, 0 px horizontal overflow at 390 px, the notch inset
+respected (47 px padding, text starts at 63 px), both strip actions 44 px, the
+details panel capped at 520 px, 0 px overflow and 142 px of text at the 320 px
+reflow floor, p50/p95 frame gap 17 ms while scrolling during a run, heap flat
+at ~10 MB; the repair dialog fits 617 px with five presets, five sliders and
+two switches, and its body scrolls inside the panel instead of pushing the
+footer off-screen.
+
+`tests/site.test.ts` also checks the published surfaces: the web app document
+head, the download page's canonical/OG/Twitter tags and JSON-LD, the real
+1200x630 `og.png` and 180x180 touch icon (PNG header, not just the claim), the
+sitemap/robots pair, i18n parity in `app.js`, download links that work without
+JavaScript, the 404 page, and the phone strip CSS. `tools/make-site-assets.mjs`
+regenerates the social card and touch icon by rendering HTML in Chromium, so
+the card follows the page typography instead of being a hand-exported bitmap.
 
 Coverage:
 
@@ -340,6 +362,9 @@ Coverage:
   (listing without heavy records) and the v2 upgrade backfill.
 - `tests/basePath.test.ts` - sub-path URLs and web manifest rewriting for the
   GitHub Pages deployment.
+- `tests/site.test.ts` - the published surfaces: app document head, download
+  page SEO/JSON-LD, social card dimensions, sitemap/robots, no-JS download
+  links, 404 page and the phone strip CSS.
 - `tests/enhance.test.ts` — repair DSP (notch/low shelf, hum detection, gate,
   de-esser, EQ, compressor, levelling, limiter), preset shape, measurement and
   an SNR improvement check on real speech.

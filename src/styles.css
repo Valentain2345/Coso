@@ -2560,6 +2560,12 @@ p {
   color: var(--muted);
 }
 
+/* Phones swap the cancel label for an icon; the text stays for AT and wider
+   screens, the icon is decorative. */
+.job-strip-cancel-icon {
+  display: none;
+}
+
 .job-strip-toggle {
   gap: 4px;
 }
@@ -3533,10 +3539,44 @@ p {
     min-height: calc(66px + env(safe-area-inset-top));
   }
 
+  /* On a phone the strip is the topmost surface. It owns the notch inset so
+     its background runs under the status bar, and it merges with the title bar
+     below into one app-bar block: a single hairline, no seam between rows. */
+  .job-strip {
+    padding-top: env(safe-area-inset-top);
+    background: var(--paper);
+    border-bottom: 0;
+  }
+
   .job-strip-row {
-    height: 38px;
+    height: auto;
+    min-height: 48px;
+    gap: 6px;
+    padding-top: 2px;
+    padding-bottom: 2px;
     padding-left: calc(14px + env(safe-area-inset-left));
-    padding-right: calc(10px + env(safe-area-inset-right));
+    padding-right: calc(8px + env(safe-area-inset-right));
+    font-size: 13px;
+  }
+
+  /* The strip already cleared the status bar, so the bar below it must not
+     add the same inset again or repeat the divider. */
+  .job-strip + .topbar {
+    padding-top: 8px;
+  }
+
+  /* Thumb-sized actions: WCAG 2.5.5 wants 44x44 on touch. */
+  .job-strip-toggle,
+  .job-strip-cancel {
+    height: 44px;
+    min-height: 44px;
+    padding: 0 10px;
+  }
+
+  .job-strip-panel {
+    max-height: min(62dvh, 520px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .job-strip-panel .progress-card {
@@ -3649,22 +3689,37 @@ p {
 
 @media (max-width: 620px) {
   .job-strip-row {
-    gap: 6px;
-    height: 38px;
-    padding: 0 8px 0 14px;
+    gap: 4px;
+    min-height: 48px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    padding-left: calc(12px + env(safe-area-inset-left));
+    padding-right: calc(4px + env(safe-area-inset-right));
   }
 
   .job-strip-name {
     display: none;
   }
 
-  .job-strip-toggle-text {
+  .job-strip-toggle,
+  .job-strip-cancel {
+    width: 44px;
+    min-width: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .job-strip-toggle-text,
+  .job-strip-cancel-text {
     display: none;
   }
 
-  .job-strip-toggle,
-  .job-strip-cancel {
-    padding: 0 6px;
+  .job-strip-cancel-icon {
+    display: block;
+  }
+
+  .job-strip-queued {
+    padding: 1px 7px;
   }
 
   .job-strip-panel .progress-card {

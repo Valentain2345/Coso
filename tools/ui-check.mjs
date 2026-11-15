@@ -146,12 +146,72 @@ const detailsGeometry = await page.evaluate(() => ({
 await page.getByRole('button', { name: 'Continue in the background' }).click();
 
 await page.setViewportSize({ width: 390, height: 844 });
+// Emulate a notched phone: the strip is the topmost surface, so its background
+// must run under the status bar and its content must stay clear of it.
+let safeAreaTop = 0;
+try {
+  await page.context().newCDPSession(page).then((session) =>
+    session.send('Emulation.setSafeAreaInsetsOverride', {
+      insets: { top: 47, left: 0, bottom: 34, right: 0 },
+    }),
+  );
+  safeAreaTop = 47;
+} catch (error) {
+  console.warn('safe-area emulation unavailable:', error.message);
+}
 await page.waitForTimeout(500);
 await shot('04-strip-phone');
-const phoneOverflow = await page.evaluate(() => ({
-  horizontalOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  stripHeight: Math.round(document.querySelector('.job-strip')?.getBoundingClientRect().height ?? 0),
-}));
+const phoneOverflow = await page.evaluate(() => {
+  const strip = document.querySelector('.job-strip');
+  const text = document.querySelector('.job-strip-text');
+  const row = document.querySelector('.job-strip-row');
+  const buttons = Array.from(document.querySelectorAll('.job-strip-row .btn'));
+  const heights = buttons.map((button) => Math.round(button.getBoundingClientRect().height));
+  return {
+    horizontalOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    stripHeight: Math.round(strip?.getBoundingClientRect().height ?? 0),
+    stripTop: Math.round(strip?.getBoundingClientRect().top ?? 0),
+    stripPaddingTop: Math.round(parseFloat(getComputedStyle(strip).paddingTop || '0')),
+    textTop: Math.round(text?.getBoundingClientRect().top ?? 0),
+    minButtonHeight: heights.length ? Math.min(...heights) : 0,
+    buttonCount: buttons.length,
+    rowOverflows: Boolean(row && row.scrollWidth > row.clientWidth + 1),
+    panelMaxHeight: getComputedStyle(document.querySelector('.job-strip')).maxHeight,
+  };
+});
+
+// The details panel on a phone must scroll inside the strip, not swallow the
+// workspace below it.
+await page.getByRole('button', { name: /transcription details/i }).click();
+await page.waitForTimeout(400);
+await shot('04b-strip-phone-details');
+const phonePanel = await page.evaluate(() => {
+  const panel = document.querySelector('.job-strip-panel');
+  return {
+    panelHeight: Math.round(panel?.getBoundingClientRect().height ?? 0),
+    panelScrolls: Boolean(panel && panel.scrollHeight > panel.clientHeight),
+    panelMaxHeight: panel ? getComputedStyle(panel).maxHeight : 'none',
+    viewportHeight: window.innerHeight,
+  };
+});
+await page.getByRole('button', { name: 'Continue in the background' }).click();
+await page.waitForTimeout(200);
+
+// 320 CSS px is the WCAG 1.4.10 reflow floor: nothing may overflow or collapse.
+await page.setViewportSize({ width: 320, height: 700 });
+await page.waitForTimeout(300);
+await shot('04c-strip-phone-narrow');
+const narrowPhone = await page.evaluate(() => {
+  const text = document.querySelector('.job-strip-text');
+  return {
+    horizontalOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    textWidth: Math.round(text?.getBoundingClientRect().width ?? 0),
+    buttons: Array.from(document.querySelectorAll('.job-strip-row .btn')).map((button) =>
+      Math.round(button.getBoundingClientRect().height),
+    ),
+  };
+});
+
 await page.setViewportSize({ width: 1280, height: 820 });
 
 // Recording while a transcription is in flight: both must keep working.
@@ -204,7 +264,11 @@ const report = {
   startupMs,
   ...paint,
   repair: { ...repairBase, ...repairTune, phone: repairPhone },
-  strip: { ...stripGeometry, ...detailsGeometry, ...phoneOverflow },
+  strip: {
+    collapsed: { ...stripGeometry },
+    expanded: { ...detailsGeometry },
+    phone: { ...phoneOverflow, safeAreaTop, panel: phonePanel, narrow: narrowPhone },
+  },
   recording: { ...recordingState, addToQueueButton: queuedLabel > 0, queuedBadge },
   perf: {
     windowSeconds: Math.round(wallSeconds),
