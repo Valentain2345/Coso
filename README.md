@@ -76,6 +76,7 @@ stays inside the Core Web Vitals budget on a phone.
 | `404.html` | GitHub Pages serves it for unknown paths; keeps the brand and two working links |
 | `assets/og.png` | 1200x630 card for Open Graph, Twitter and `SoftwareApplication.image` |
 | `assets/apple-touch-icon.png` | 180x180 home-screen icon for iOS |
+| `googleea32ad5a5a8fb4e3.html` | Search Console proof for the site root (see below) |
 
 `index.html` carries `canonical`, `robots`, `color-scheme`, dual
 `theme-color`, `og:*`, `twitter:*`, `viewport-fit=cover` and a JSON-LD graph
@@ -106,3 +107,20 @@ Invoke-RestMethod -Method Post https://api.indexnow.org/indexnow -ContentType 'a
   urlList = @('https://valentain2345.github.io/Coso/', 'https://valentain2345.github.io/Coso/app/')
 } | ConvertTo-Json)
 ```
+
+### Verifying the property
+
+Search Console offers a file, a meta tag and a DNS record. A GitHub Pages
+project site owns neither the host root nor its DNS, so the DNS record cannot
+be used; keep both other proofs in place:
+
+- `googleea32ad5a5a8fb4e3.html` at the site root (and its copy in
+  `../Coso audio app/public/`, which `publish-web.ps1` also places under
+  `app/` so the `/Coso/app/` prefix can be verified);
+- the `google-site-verification` meta tag in `index.html` and in the app
+  document head.
+
+The HTML proof must stay byte-identical to what Search Console gave you (no
+BOM, no added newline). `tests/site.test.ts` checks exactly that, so an edit
+that would break verification fails the suite instead of silently unverifying
+the site. After the first successful verification, submit the sitemap.
