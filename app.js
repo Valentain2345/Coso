@@ -9,6 +9,8 @@ const CONFIG = {
   windowsAsset: 'Coso-setup.exe',
   androidAsset: 'Coso.apk',
 };
+// Analytics lives in analytics/client.js (loaded from index.html): consent,
+// pageviews, outbound links and the shared storage with /Coso/app/.
 // ---------------------------------------------------------------------------
 
 const TRANSLATIONS = {
@@ -51,11 +53,21 @@ const TRANSLATIONS = {
     'g3.s2': 'Choose a model the first time; it downloads once and stays cached on your device.',
     'g3.s3': 'On a phone, use “Add to home screen” to launch it like an app.',
     'privacy.quote':
-      'Your recordings never leave your device. No telemetry, no cloud, no account — the code is open and you can check.',
+      'Your recordings never leave your device. The Windows and Android apps send <strong>no telemetry at all</strong>; the website and web app count anonymous visits — only if you accept. No cloud, no account, and the code is open.',
+    'privacy.note':
+      '* “No telemetry” describes the native apps. The site and web app measure page, referrer, language and device type to know what to fix: no audio, no cookies, no IP stored, and nothing is sent unless you accept.',
+    'consent.title': 'Anonymous analytics',
+    'consent.body':
+      'The apps send nothing. This site and the web app would like to count anonymous visits (page, referrer, language, device) to improve them — no cookies, no IP stored, no audio. You can change this later under “Analytics”.',
+    'consent.accept': 'Accept',
+    'consent.reject': 'Reject',
+    'consent.more': 'Details',
     'footer.line': 'Coso — free, open-source lecture transcription.',
     'footer.source': 'Source code',
     'footer.issues': 'Report a problem',
     'footer.webapp': 'Web app',
+    'footer.privacy': 'Privacy',
+    'footer.analytics': 'Analytics',
   },
   es: {
     'hero.title': 'Graba la clase.<br />Quédate la transcripción.',
@@ -96,11 +108,21 @@ const TRANSLATIONS = {
     'g3.s2': 'Elige un modelo la primera vez; se descarga una vez y queda guardado en tu dispositivo.',
     'g3.s3': 'En el teléfono, usa «Añadir a la pantalla de inicio» para abrirla como una app.',
     'privacy.quote':
-      'Tus grabaciones nunca salen de tu dispositivo. Sin telemetría, sin nube, sin cuenta — el código es abierto y puedes comprobarlo.',
+      'Tus grabaciones nunca salen de tu dispositivo. Las apps de Windows y Android no envían <strong>ninguna telemetría</strong>; el sitio y la app web cuentan visitas anónimas — solo si aceptas. Sin nube, sin cuenta y con el código abierto.',
+    'privacy.note':
+      '* «Sin telemetría» se refiere a las apps nativas. El sitio y la app web miden página, procedencia, idioma y tipo de dispositivo para saber qué mejorar: sin audio, sin cookies, sin guardar tu IP, y no se envía nada si no aceptas.',
+    'consent.title': 'Analítica anónima',
+    'consent.body':
+      'Las apps no envían nada. Al sitio y a la app web les gustaría contar visitas anónimas (página, procedencia, idioma, dispositivo) para mejorarlos — sin cookies, sin guardar tu IP, sin audio. Puedes cambiarlo después en «Analítica».',
+    'consent.accept': 'Aceptar',
+    'consent.reject': 'Rechazar',
+    'consent.more': 'Detalles',
     'footer.line': 'Coso — transcripción de clases libre y de código abierto.',
     'footer.source': 'Código fuente',
     'footer.issues': 'Reportar un problema',
     'footer.webapp': 'App web',
+    'footer.privacy': 'Privacidad',
+    'footer.analytics': 'Analítica',
   },
 };
 
@@ -117,6 +139,8 @@ const META = {
 
 function setLang(lang) {
   document.documentElement.lang = lang;
+  // The analytics consent bar follows the page language without coupling.
+  document.dispatchEvent(new CustomEvent('coso:lang', { detail: lang }));
   try {
     localStorage.setItem('coso.pageLang', lang);
   } catch {
@@ -182,3 +206,11 @@ document.getElementById('lang').addEventListener('click', () => {
 
 wireLinks();
 setLang(initialLang());
+// Analytics ----------------------------------------------------------------
+// analytics/client.js owns the consent bar, the pageview and the events; this
+// button only reopens the choice. Withdrawing consent has to be as easy as
+// granting it.
+document.getElementById('link-analytics')?.addEventListener('click', (event) => {
+  event.preventDefault();
+  window.cosoAnalytics?.open();
+});

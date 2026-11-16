@@ -40,12 +40,8 @@
 
     <link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Literata:ital,opsz,wght@0,7..72,400;1,7..72,400&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Fonts are self-hosted from assets/fonts (see tools/self-host-fonts.mjs):
+         no render-blocking request to fonts.googleapis.com. -->
     <link rel="stylesheet" href="styles.css" />
     <script type="application/ld+json">
       {
@@ -216,11 +212,17 @@
       </section>
 
       <!-- Privacy strip -->
-      <section class="privacy">
+      <section class="privacy" id="privacy">
         <blockquote data-i18n="privacy.quote">
-          Your recordings never leave your device. No telemetry, no cloud, no account —
-          the code is open and you can check.
+          Your recordings never leave your device. The Windows and Android apps send
+          <strong>no telemetry at all</strong>; the website and web app count anonymous
+          visits — only if you accept. No cloud, no account, and the code is open.
         </blockquote>
+        <p class="privacy-note" data-i18n="privacy.note">
+          * “No telemetry” describes the native apps. The site and web app measure page,
+          referrer, language and device type to know what to fix: no audio, no cookies, no IP
+          stored, and nothing is sent unless you accept below.
+        </p>
       </section>
     </main>
 
@@ -229,10 +231,21 @@
       <p class="footer-links">
         <a href="https://github.com/Valentain2345/Coso" id="link-repo" data-i18n="footer.source">Source code</a> ·
         <a href="https://github.com/Valentain2345/Coso/issues" id="link-issues" data-i18n="footer.issues">Report a problem</a> ·
-        <a href="app/" data-i18n="footer.webapp">Web app</a>
+        <a href="app/" data-i18n="footer.webapp">Web app</a> ·
+        <a href="#privacy" id="link-privacy" data-i18n="footer.privacy">Privacy</a> ·
+        <button type="button" class="link-button" id="link-analytics" data-i18n="footer.analytics">Analytics</button>
       </p>
     </footer>
 
+    <!-- Analytics client: inert until an endpoint exists and the visitor
+         accepts. Shared with the web app, which loads the same file. -->
+    <script
+      defer
+      src="analytics/client.js"
+      data-endpoint="https://br-broad-mode-bd85rkq4-analytics.compute.c-8.us-east-2.aws.neon.tech/api/collect"
+      data-surface="site"
+      data-details="https://valentain2345.github.io/Coso/#privacy"
+    ></script>
     <script src="app.js"></script>
   </body>
 </html>

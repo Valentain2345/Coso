@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Coso analytics</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/icon.svg" />
+    <link rel="stylesheet" href="dashboard.css" />
+    <!-- Collected by the Worker; also used for /api/auth/* and /api/stats. -->
+    <script
+      defer
+      src="dashboard.js"
+      data-endpoint="https://br-broad-mode-bd85rkq4-analytics.compute.c-8.us-east-2.aws.neon.tech"
+    ></script>
+  </head>
+  <body data-dashboard>
+    <header class="top">
+      <div class="brand">
+        <a href="../" class="brand-link">Coso</a>
+        <span class="brand-sep">/</span>
+        <span class="brand-page">analytics</span>
+      </div>
+      <div class="account" hidden>
+        <span id="who"></span>
+        <button type="button" class="ghost" id="signout">Sign out</button>
+      </div>
+    </header>
+
+    <main>
+      <!-- Signed out: GitHub device flow, no client secret, no callback server. -->
+      <section class="card login" id="login">
+        <h1>Sign in to see the numbers</h1>
+        <p class="muted">
+          Aggregate, cookie-free analytics for the download page and the web app. Only
+          allowlisted GitHub accounts can read it; the native apps send nothing at all.
+        </p>
+        <button type="button" class="primary" id="start-login">Sign in with GitHub</button>
+        <div class="device" id="device" hidden>
+          <p>Enter this code on GitHub:</p>
+          <p class="code" id="user-code" aria-live="polite"></p>
+          <p>
+            <a id="verify-link" href="https://github.com/login/device" target="_blank" rel="noreferrer noopener">
+              Open github.com/login/device
+            </a>
+            <button type="button" class="ghost" id="copy-code">Copy code</button>
+          </p>
+          <p class="muted" id="login-status" aria-live="polite">Waiting for approval…</p>
+        </div>
+        <p class="error" id="login-error" role="alert" hidden></p>
+      </section>
+
+      <!-- Signed in: the dashboard itself. -->
+      <section id="app" hidden>
+        <div class="toolbar">
+          <div class="seg" role="group" aria-label="Date range">
+            <button type="button" data-days="7">7 days</button>
+            <button type="button" data-days="30" class="active">30 days</button>
+            <button type="button" data-days="90">90 days</button>
+            <button type="button" data-days="365">1 year</button>
+          </div>
+          <div class="seg" role="group" aria-label="Surface">
+            <button type="button" data-surface="all" class="active">Everything</button>
+            <button type="button" data-surface="site">Site</button>
+            <button type="button" data-surface="app">Web app</button>
+          </div>
+          <div class="toolbar-end">
+            <button type="button" class="ghost" id="refresh">Refresh</button>
+            <button type="button" class="ghost" id="export">Export CSV</button>
+          </div>
+        </div>
+
+        <p class="error" id="error" role="alert" hidden></p>
+
+        <div class="kpis" id="kpis">
+          <article class="card kpi">
+            <h2>Visitors</h2>
+            <p class="value" id="kpi-visitors">—</p>
+            <p class="hint" id="hint-visitors"></p>
+          </article>
+          <article class="card kpi">
+            <h2>Pageviews</h2>
+            <p class="value" id="kpi-views">—</p>
+            <p class="hint" id="hint-views"></p>
+          </article>
+          <article class="card kpi">
+            <h2>Views / visitor</h2>
+            <p class="value" id="kpi-depth">—</p>
+            <p class="hint">pages per visit</p>
+          </article>
+          <article class="card kpi">
+            <h2>Bounce rate</h2>
+            <p class="value" id="kpi-bounce">—</p>
+            <p class="hint">visits with a single page</p>
+          </article>
+          <article class="card kpi">
+            <h2>Avg. engagement</h2>
+            <p class="value" id="kpi-time">—</p>
+            <p class="hint" id="hint-time"></p>
+          </article>
+        </div>
+
+        <figure class="card chart">
+          <figcaption>
+            <h2>Traffic</h2>
+            <p class="legend"><span class="dot views"></span> pageviews <span class="dot visitors"></span> visitors</p>
+          </figcaption>
+          <div id="chart" class="chart-body"></div>
+          <div class="table-fallback" id="chart-table"></div>
+        </figure>
+
+        <div class="grid">
+          <section class="card">
+            <h2>Top pages</h2>
+            <table data-table="pages"><thead><tr><th>Page</th><th>Views</th></tr></thead><tbody></tbody></table>
+          </section>
+          <section class="card">
+            <h2>Channels</h2>
+            <table data-table="channels"><thead><tr><th>Channel</th><th>Views</th></tr></thead><tbody></tbody></table>
+          </section>
+          <section class="card">
+            <h2>Referrers</h2>
+            <table data-table="referrers"><thead><tr><th>Source</th><th>Views</th></tr></thead><tbody></tbody></table>
+          </section>
+          <section class="card">
+            <h2>Languages</h2>
+            <table data-table="languages"><thead><tr><th>Language</th><th>Views</th></tr></thead><tbody></tbody></table>
+          </section>
+          <section class="card">
+            <h2>Devices</h2>
+            <table data-table="devices"><thead><tr><th>Device</th><th>Views</th></tr></thead><tbody></tbody></table>
+          </section>
+          <section class="card">
+            <h2>Browsers</h2>
+            <table data-table="browsers"><thead><tr><th>Browser</th><th>Views</th></tr></thead><tbody></tbody></table>
+          </section>
+          <section class="card">
+            <h2>Surfaces</h2>
+            <table data-table="surfaces"><thead><tr><th>Surface</th><th>Views</th></tr></thead><tbody></tbody></table>
+          </section>
+          <section class="card">
+            <h2>Operating systems</h2>
+            <table data-table="oses"><thead><tr><th>System</th><th>Views</th></tr></thead><tbody></tbody></table>
+          </section>
+          <section class="card">
+            <h2>Custom events</h2>
+            <table data-table="events"><thead><tr><th>Event</th><th>Count</th></tr></thead><tbody></tbody></table>
+          </section>
+        </div>
+
+        <footer class="note">
+          <p>
+            No cookies, no IP addresses, no full URLs and no audio. A visitor is a daily
+            rotating HMAC, so nobody can be followed from one day to the next. Data older
+            than 180 days is deleted automatically.
+          </p>
+        </footer>
+      </section>
+    </main>
+  </body>
+</html>
