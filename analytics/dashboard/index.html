@@ -149,11 +149,71 @@
           </section>
         </div>
 
+        <section class="perf" id="performance">
+          <h2 class="section-title">Performance and errors</h2>
+          <p class="muted section-hint">
+            OpenTelemetry, from visitors who accepted analytics. Percentiles are p75 over
+            the selected range; nothing here is sampled from the native apps.
+          </p>
+          <div class="kpis">
+            <article class="card kpi">
+              <h2>LCP p75</h2>
+              <p class="value" id="kpi-lcp">—</p>
+              <p class="hint" id="hint-lcp"></p>
+            </article>
+            <article class="card kpi">
+              <h2>CLS p75</h2>
+              <p class="value" id="kpi-cls">—</p>
+              <p class="hint" id="hint-cls"></p>
+            </article>
+            <article class="card kpi">
+              <h2>INP p75</h2>
+              <p class="value" id="kpi-inp">—</p>
+              <p class="hint" id="hint-inp"></p>
+            </article>
+            <article class="card kpi">
+              <h2>Errors</h2>
+              <p class="value" id="kpi-errors">—</p>
+              <p class="hint" id="hint-errors"></p>
+            </article>
+          </div>
+          <div class="grid">
+            <section class="card">
+              <h2>Web vitals</h2>
+              <table data-table="vitals">
+                <thead><tr><th>Metric</th><th>p75</th><th>Samples</th><th>Good</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </section>
+            <section class="card">
+              <h2>Errors</h2>
+              <table data-table="exceptions">
+                <thead><tr><th>Where</th><th>Message</th><th>Count</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </section>
+            <section class="card">
+              <h2>Slowest operations</h2>
+              <table data-table="slowest">
+                <thead><tr><th>Operation</th><th>p75</th><th>Worst</th><th>Count</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </section>
+            <section class="card">
+              <h2>Server requests</h2>
+              <table data-table="requests">
+                <thead><tr><th>Route</th><th>Status</th><th>Count</th><th>p75</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </section>
+          </div>
+        </section>
+
         <footer class="note">
           <p>
             No cookies, no IP addresses, no full URLs and no audio. A visitor is a daily
-            rotating HMAC, so nobody can be followed from one day to the next. Data older
-            than 180 days is deleted automatically.
+            rotating HMAC, so nobody can be followed from one day to the next. Pageviews
+            are deleted after 180 days, OpenTelemetry spans and web vitals after 30.
           </p>
         </footer>
       </section>
