@@ -7,6 +7,8 @@ import {
   buildEnv,
   classifyTauriFailure,
   gradleExclusions,
+  missingSigningVars,
+  needsShell,
 } from '../tools/android-build.mjs';
 
 describe('classifyTauriFailure', () => {
@@ -54,6 +56,45 @@ describe('buildEnv', () => {
   });
 });
 
+describe('missingSigningVars', () => {
+  it('names every variable Gradle needs to sign the APK', () => {
+    expect(missingSigningVars({})).toEqual([
+      'COSO_RELEASE_KEYSTORE',
+      'COSO_RELEASE_STORE_PASSWORD',
+      'COSO_RELEASE_KEY_ALIAS',
+      'COSO_RELEASE_KEY_PASSWORD',
+    ]);
+  });
+
+  it('reports an incomplete configuration', () => {
+    expect(missingSigningVars({ COSO_RELEASE_KEYSTORE: 'coso.jks' })).toEqual([
+      'COSO_RELEASE_STORE_PASSWORD',
+      'COSO_RELEASE_KEY_ALIAS',
+      'COSO_RELEASE_KEY_PASSWORD',
+    ]);
+  });
+
+  it('accepts a complete configuration', () => {
+    expect(
+      missingSigningVars({
+        COSO_RELEASE_KEYSTORE: 'coso.jks',
+        COSO_RELEASE_STORE_PASSWORD: 'secret',
+        COSO_RELEASE_KEY_ALIAS: 'coso',
+        COSO_RELEASE_KEY_PASSWORD: 'secret',
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe('needsShell', () => {
+  it('runs the Gradle wrapper through cmd.exe on Windows', () => {
+    expect(needsShell(String.raw`C:\Coso audio app\src-tauri\gen\android\gradlew.bat`, 'win32')).toBe(true);
+    expect(needsShell('gradlew.cmd', 'win32')).toBe(true);
+    expect(needsShell('gradlew.bat', 'linux')).toBe(false);
+    expect(needsShell('/usr/bin/gradle', 'win32')).toBe(false);
+  });
+});
+
 describe('apkOutputPath', () => {
   it('returns null when the profile has not been built yet', () => {
     const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'coso-apk-'));
@@ -76,6 +117,22 @@ describe('apkOutputPath', () => {
       fs.writeFileSync(fresh, 'fresh');
       fs.utimesSync(fresh, new Date(Date.now() + 1000), new Date(Date.now() + 1000));
       expect(apkOutputPath('debug', base)).toBe(fresh);
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores an unsigned APK so a release never ships uninstallable', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'coso-apk-'));
+    try {
+      const dir = path.join(base, 'app', 'build', 'outputs', 'apk', 'universal', 'release');
+      fs.mkdirSync(dir, { recursive: true });
+      const signed = path.join(dir, 'app-universal-release.apk');
+      const unsigned = path.join(dir, 'app-universal-release-unsigned.apk');
+      fs.writeFileSync(signed, 'signed');
+      fs.writeFileSync(unsigned, 'unsigned');
+      fs.utimesSync(unsigned, new Date(Date.now() + 2000), new Date(Date.now() + 2000));
+      expect(apkOutputPath('release', base)).toBe(signed);
     } finally {
       fs.rmSync(base, { recursive: true, force: true });
     }
