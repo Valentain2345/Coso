@@ -9,6 +9,7 @@ import '@fontsource/literata/600.css';
 import './styles.css';
 import App from './App';
 import { mountAnalytics } from './lib/analytics';
+import { startTelemetry } from './lib/telemetry';
 import { isTauri } from './lib/tauri';
 
 const container = document.getElementById('root');
@@ -34,9 +35,12 @@ requestAnimationFrame(() => {
 });
 
 // Anonymous analytics: browser builds only, opt-in, and after mount so it can
-// never delay the first paint.
+// never delay the first paint. Telemetry (OpenTelemetry) goes through the same
+// consent gate and only downloads its chunk once the visitor accepts.
 requestAnimationFrame(() => {
-  if (!isTauri()) mountAnalytics();
+  if (isTauri()) return;
+  mountAnalytics();
+  void startTelemetry();
 });
 
 // The app-shell service worker is a web/offline optimisation only. In WebView2

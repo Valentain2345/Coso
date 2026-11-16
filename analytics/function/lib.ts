@@ -38,6 +38,21 @@ export function visitorId(secret: string, day: string, ip: string, userAgent: st
   return createHmac('sha256', secret).update(`${day}|${ip}|${userAgent}`).digest('hex').slice(0, 16);
 }
 
+/**
+ * Best effort client address, used only as an HMAC input and never persisted.
+ *
+ * Neon Functions sit behind a proxy that forwards the usual headers; if none is
+ * present the visitor is still counted, just less precisely.
+ */
+export function clientIp(request: Request): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    const first = forwarded.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  return request.headers.get('x-real-ip') ?? request.headers.get('cf-connecting-ip') ?? '';
+}
+
 /** Page path without query or hash, capped so a crafted URL cannot bloat a row. */
 export function cleanPath(value: unknown): string {
   if (typeof value !== 'string') return '/';

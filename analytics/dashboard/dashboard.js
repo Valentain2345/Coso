@@ -1,10 +1,11 @@
 /**
  * Coso analytics dashboard (GitHub device-flow login, no dependencies).
  *
- * Everything it reads comes from the Worker in `../worker`: totals, timeseries,
- * pages, channels, referrers, languages, devices, browsers, systems, surfaces
- * and custom events. The token lives in sessionStorage and is only ever sent to
- * the Worker, never to a third party; the page loads no external scripts.
+ * Everything it reads comes from the analytics Function: totals, timeseries,
+ * pages, channels, referrers, languages, devices, browsers, systems, surfaces,
+ * custom events, and the OpenTelemetry section (web vitals, errors, slow spans,
+ * server requests). The token lives in sessionStorage and is only ever sent to
+ * that Function, never to a third party; the page loads no external scripts.
  */
 (() => {
   'use strict';
@@ -22,6 +23,7 @@
     days: 30,
     surface: 'all',
     data: null,
+    telemetry: null,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -161,13 +163,20 @@
     const params = new URLSearchParams({ days: String(state.days) });
     if (state.surface !== 'all') params.set('surface', state.surface);
     try {
-      const data = await api(`/api/stats?${params}`);
+      // Telemetry is a separate signal and may legitimately be empty (nobody
+      // has accepted yet): it must never take the traffic numbers down with it.
+      const [data, telemetry] = await Promise.all([
+        api(`/api/stats?${params}`),
+        api(`/api/telemetry?${params}`).catch(() => null),
+      ]);
       state.data = data;
+      state.telemetry = telemetry;
       state.login = data.login;
       if (!sessionStorage.getItem(LOGIN_KEY)) sessionStorage.setItem(LOGIN_KEY, data.login);
       $('who').textContent = `@${data.login}`;
       document.querySelector('.account').hidden = false;
       render(data);
+      renderTelemetry(telemetry);
     } catch (error) {
       if (error.status === 401 || error.status === 403) {
         signOut();
@@ -259,6 +268,81 @@
       .join('');
   }
 
+  // Telemetry (OpenTelemetry) -------------------------------------------------
+  /** LCP/INP/TTFB are milliseconds, CLS is a unitless score. */
+  function formatVital(name, value) {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) return '—';
+    const number = Number(value);
+    if (name === 'webvital.cls') return number.toFixed(3);
+    return `${Math.round(number)} ms`;
+  }
+
+  const vitalLabel = (name) => String(name || '').replace(/^webvital\./, '').toUpperCase() || '—';
+
+  /** Plain rows: the telemetry tables have more than the two columns of `renderTable`. */
+  function renderRows(name, rows, columns) {
+    const body = document.querySelector(`table[data-table="${name}"] tbody`);
+    if (!body) return;
+    const list = rows || [];
+    if (list.length === 0) {
+      body.innerHTML = `<tr><td colspan="${columns.length}"><span class="empty">No data yet</span></td></tr>`;
+      return;
+    }
+    body.innerHTML = list
+      .map((row) => `<tr>${columns.map((column) => `<td>${esc(column(row))}</td>`).join('')}</tr>`)
+      .join('');
+  }
+
+  function renderTelemetry(data) {
+    const vitals = (data && data.vitals) || [];
+    const byName = new Map(vitals.map((row) => [row.name, row]));
+    const errors = (data && data.errors) || [];
+    const slowest = (data && data.slowest) || [];
+    const requests = (data && data.requests) || [];
+
+    const kpi = (suffix, name, format) => {
+      const row = byName.get(name);
+      $(`kpi-${suffix}`).textContent = row ? format(row.p75) : '—';
+      $(`hint-${suffix}`).textContent = row
+        ? `${num(row.good)}/${num(row.samples)} good`
+        : 'no samples yet';
+    };
+
+    kpi('lcp', 'webvital.lcp', (value) => formatVital('webvital.lcp', value));
+    kpi('cls', 'webvital.cls', (value) => formatVital('webvital.cls', value));
+    kpi('inp', 'webvital.inp', (value) => formatVital('webvital.inp', value));
+
+    const errorCount = errors.reduce((sum, row) => sum + (Number(row.count) || 0), 0);
+    $('kpi-errors').textContent = data ? num(errorCount) : '—';
+    $('hint-errors').textContent = data
+      ? `${num(requests.reduce((sum, row) => sum + (Number(row.count) || 0), 0))} server spans`
+      : 'telemetry unavailable';
+
+    renderRows('vitals', vitals, [
+      (row) => vitalLabel(row.name),
+      (row) => formatVital(row.name, row.p75),
+      (row) => num(row.samples),
+      (row) => percent(Number(row.good) || 0, Number(row.samples) || 0),
+    ]);
+    renderRows('exceptions', errors, [
+      (row) => row.name || 'exception',
+      (row) => row.message || '—',
+      (row) => num(row.count),
+    ]);
+    renderRows('slowest', slowest, [
+      (row) => row.name,
+      (row) => `${num(row.p75)} ms`,
+      (row) => `${num(row.worst)} ms`,
+      (row) => num(row.count),
+    ]);
+    renderRows('requests', requests, [
+      (row) => row.name,
+      (row) => row.status,
+      (row) => num(row.count),
+      (row) => `${num(row.p75)} ms`,
+    ]);
+  }
+
   // Chart ---------------------------------------------------------------------
   function drawChart(series) {
     const host = $('chart');
@@ -337,6 +421,18 @@
     add('os', data.oses, (row) => row.os);
     add('surface', data.surfaces, (row) => row.surface);
     add('event', data.events, (row) => row.event);
+    const telemetry = state.telemetry;
+    if (telemetry) {
+      for (const row of telemetry.vitals || []) {
+        rows.push(['vital', row.name, String(row.p75 ?? '')]);
+      }
+      for (const row of telemetry.errors || []) {
+        rows.push(['error', `${row.name}: ${row.message}`, String(Number(row.count) || 0)]);
+      }
+      for (const row of telemetry.requests || []) {
+        rows.push(['request', `${row.name} (${row.status})`, String(Number(row.count) || 0)]);
+      }
+    }
 
     const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -395,5 +491,5 @@
     signOut();
   }
 
-  window.cosoDashboard = { load, state, fillDays, formatDuration, exportCsv, signOut };
+  window.cosoDashboard = { load, state, fillDays, formatDuration, renderTelemetry, exportCsv, signOut };
 })();

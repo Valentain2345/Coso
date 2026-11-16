@@ -21,7 +21,9 @@
  */
 
 import { parseTriggerDelivery } from '@neon/functions/triggers';
+import { trace, SpanKind, SpanStatusCode, type Tracer } from '@opentelemetry/api';
 
+import { deleteOlderThan } from '../../telemetry/function/store';
 import {
   channelsOf,
   classifyBrowser,
@@ -34,6 +36,7 @@ import {
   cleanReferrer,
   cleanSource,
   cleanSurface,
+  clientIp,
   corsHeaders,
   isAllowedLogin,
   isBot,
@@ -44,6 +47,8 @@ import {
 } from './lib';
 
 export const RETENTION_DAYS = 180;
+/** Telemetry is bulkier and less precious than the aggregates; it goes sooner. */
+export const TELEMETRY_RETENTION_DAYS = 30;
 export const MAX_DAYS = 365;
 export const DEFAULT_DAYS = 30;
 const DAY_MS = 86_400_000;
@@ -71,6 +76,8 @@ export interface AnalyticsDeps {
   now?: () => number;
   /** Only replaced in tests; production uses the global fetch. */
   githubFetch?: typeof fetch;
+  /** Registered provider from `otel.ts`; the API's no-op tracer by default. */
+  tracer?: Tracer;
 }
 
 interface Row {
@@ -80,21 +87,6 @@ interface Row {
 const noContent = (headers: Record<string, string>) => new Response(null, { status: 204, headers });
 
 const originOf = (request: Request) => request.headers.get('origin') ?? '';
-
-/**
- * Best effort client address, used only as an HMAC input and never persisted.
- *
- * Neon Functions sit behind a proxy that forwards the usual headers; if none is
- * present the visitor is still counted, just less precisely.
- */
-export function clientIp(request: Request): string {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) {
-    const first = forwarded.split(',')[0]?.trim();
-    if (first) return first;
-  }
-  return request.headers.get('x-real-ip') ?? request.headers.get('cf-connecting-ip') ?? '';
-}
 
 /**
  * Verifies a GitHub token and returns its login. Cached per isolate for five
@@ -107,6 +99,7 @@ export function createAnalytics(deps: AnalyticsDeps) {
   const now = deps.now ?? Date.now;
   const githubFetch = deps.githubFetch ?? fetch;
   const query = deps.query;
+  const tracer = deps.tracer ?? trace.getTracer('coso-analytics');
 
   async function githubLogin(token: string): Promise<string | null> {
     if (typeof token !== 'string' || token.length === 0) return null;
@@ -335,6 +328,114 @@ export function createAnalytics(deps: AnalyticsDeps) {
     );
   }
 
+  /**
+   * OpenTelemetry aggregates for the dashboard: web vitals, errors, slow spans
+   * and server request health. Same allowlist and range rules as `stats`.
+   */
+  async function telemetry(request: Request, url: URL, headers: Record<string, string>): Promise<Response> {
+    const token = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '');
+    const login = await githubLogin(token);
+    if (!login || !isAllowedLogin(login, env.allowedLogins)) {
+      return json({ error: 'forbidden' }, 403, headers);
+    }
+
+    const days = Math.min(MAX_DAYS, Math.max(1, Number(url.searchParams.get('days')) || DEFAULT_DAYS));
+    const since = utcDay(new Date(now() - (days - 1) * DAY_MS));
+    const requested = url.searchParams.get('surface');
+    const surface = requested === 'site' || requested === 'app' || requested === 'server' ? requested : null;
+    const filter = surface ? 'AND surface = $2' : '';
+    const params = surface ? [since, surface] : [since];
+    const run = <T extends Record<string, unknown>>(sql: string) => query<T>(sql, params);
+
+    const [vitals, errors, slowest, requests, volume] = await Promise.all([
+      run<{ name: string; p50: number; p75: number; p95: number; samples: number; good: number }>(
+        `SELECT name,
+                percentile_cont(0.5) WITHIN GROUP (ORDER BY value) AS p50,
+                percentile_cont(0.75) WITHIN GROUP (ORDER BY value) AS p75,
+                percentile_cont(0.95) WITHIN GROUP (ORDER BY value) AS p95,
+                COUNT(*)::int AS samples,
+                COUNT(*) FILTER (WHERE value <= CASE name
+                  WHEN 'webvital.lcp' THEN 2500
+                  WHEN 'webvital.cls' THEN 0.1
+                  WHEN 'webvital.inp' THEN 200
+                  WHEN 'webvital.ttfb' THEN 800
+                  ELSE 0 END)::int AS good
+         FROM otel_metrics
+         WHERE day >= $1::date AND name LIKE 'webvital.%' ${filter}
+         GROUP BY name ORDER BY name`,
+      ),
+      run<{ name: string; message: string; count: number; last_seen: string }>(
+        `SELECT name,
+                COALESCE(NULLIF(status_message, ''), 'unknown') AS message,
+                COUNT(*)::int AS count,
+                MAX(ts) AS last_seen
+         FROM otel_spans
+         WHERE day >= $1::date AND status = 'error' ${filter}
+         GROUP BY name, message ORDER BY count DESC, last_seen DESC LIMIT 12`,
+      ),
+      run<{ name: string; count: number; p75: number; worst: number }>(
+        `SELECT name, COUNT(*)::int AS count,
+                percentile_cont(0.75) WITHIN GROUP (ORDER BY duration_ms) AS p75,
+                MAX(duration_ms)::int AS worst
+         FROM otel_spans
+         WHERE day >= $1::date ${filter}
+         GROUP BY name ORDER BY p75 DESC LIMIT 12`,
+      ),
+      run<{ name: string; status: string; count: number; p75: number }>(
+        `SELECT name, status, COUNT(*)::int AS count,
+                percentile_cont(0.75) WITHIN GROUP (ORDER BY duration_ms) AS p75
+         FROM otel_spans
+         WHERE day >= $1::date AND kind = 'server' ${filter}
+         GROUP BY name, status ORDER BY count DESC LIMIT 12`,
+      ),
+      run<{ spans: number; metrics: number }>(
+        `SELECT (SELECT COUNT(*)::int FROM otel_spans WHERE day >= $1::date ${filter}) AS spans,
+                (SELECT COUNT(*)::int FROM otel_metrics WHERE day >= $1::date ${filter}) AS metrics`,
+      ),
+    ]);
+
+    const round = (value: unknown) => (value === null || value === undefined ? null : Math.round(Number(value) * 100) / 100);
+    const counted = (value: unknown) => Number(value) || 0;
+
+    return json(
+      {
+        login,
+        days,
+        since,
+        surface: surface ?? 'all',
+        vitals: vitals.map((row) => ({
+          name: row.name,
+          p50: round(row.p50),
+          p75: round(row.p75),
+          p95: round(row.p95),
+          samples: counted(row.samples),
+          good: counted(row.good),
+        })),
+        errors: errors.map((row) => ({
+          name: row.name,
+          message: row.message,
+          count: counted(row.count),
+          lastSeen: row.last_seen,
+        })),
+        slowest: slowest.map((row) => ({
+          name: row.name,
+          count: counted(row.count),
+          p75: round(row.p75),
+          worst: counted(row.worst),
+        })),
+        requests: requests.map((row) => ({
+          name: row.name,
+          status: row.status,
+          count: counted(row.count),
+          p75: round(row.p75),
+        })),
+        volume: { spans: counted(volume[0]?.spans), metrics: counted(volume[0]?.metrics) },
+      },
+      200,
+      headers,
+    );
+  }
+
   /** Daily sweep. Only a real Function Trigger delivery gets past the check. */
   async function retention(request: Request): Promise<Response> {
     const parsed = await parseTriggerDelivery(request);
@@ -344,12 +445,32 @@ export function createAnalytics(deps: AnalyticsDeps) {
     }
 
     const cutoff = utcDay(new Date(now() - RETENTION_DAYS * DAY_MS));
-    const rows = await query<{ deleted: number }>(
-      `WITH deleted AS (DELETE FROM hits WHERE day < $1::date RETURNING 1)
-       SELECT COUNT(*)::int AS deleted FROM deleted`,
-      [cutoff],
-    );
-    return json({ ok: true, cutoff, deleted: rows[0]?.deleted ?? 0 });
+    const telemetryCutoff = utcDay(new Date(now() - TELEMETRY_RETENTION_DAYS * DAY_MS));
+
+    const [rows, spans, metrics] = await Promise.all([
+      query<{ deleted: number }>(
+        `WITH deleted AS (DELETE FROM hits WHERE day < $1::date RETURNING 1)
+         SELECT COUNT(*)::int AS deleted FROM deleted`,
+        [cutoff],
+      ),
+      deleteOlderThan(query, 'otel_spans', telemetryCutoff),
+      deleteOlderThan(query, 'otel_metrics', telemetryCutoff),
+    ]);
+
+    return json({
+      ok: true,
+      cutoff,
+      deleted: rows[0]?.deleted ?? 0,
+      telemetryCutoff,
+      deletedSpans: spans,
+      deletedMetrics: metrics,
+    });
+  }
+
+  /** Route labels are a closed set: tracing must never explode cardinality. */
+  function routeName(method: string, pathname: string): string {
+    const known = ['/api/collect', '/api/auth/device', '/api/auth/token', '/api/stats', '/api/telemetry', '/api/health', '/cron'];
+    return known.includes(pathname) ? `${method} ${pathname}` : 'http.request';
   }
 
   async function handle(request: Request): Promise<Response> {
@@ -358,12 +479,40 @@ export function createAnalytics(deps: AnalyticsDeps) {
 
     if (request.method === 'OPTIONS') return noContent(headers);
 
+    // One server span per request. When no provider is registered (tests, or a
+    // deployment without OTEL) this is the API's no-op tracer: zero cost.
+    return tracer.startActiveSpan(
+      routeName(request.method, url.pathname),
+      { kind: SpanKind.SERVER },
+      async (span) => {
+        span.setAttributes({
+          'http.request.method': request.method,
+          'url.path': url.pathname,
+          'coso.surface': 'server',
+        });
+        try {
+          const response = await route(request, url, headers);
+          span.setAttribute('http.response.status_code', response.status);
+          if (response.status >= 500) span.setStatus({ code: SpanStatusCode.ERROR, message: 'server error' });
+          return response;
+        } catch (error) {
+          span.setStatus({ code: SpanStatusCode.ERROR, message: 'unhandled' });
+          throw error;
+        } finally {
+          span.end();
+        }
+      },
+    );
+  }
+
+  async function route(request: Request, url: URL, headers: Record<string, string>): Promise<Response> {
     try {
       if (url.pathname === '/cron') return await retention(request);
       if (request.method === 'POST' && url.pathname === '/api/collect') return await collect(request, headers);
       if (request.method === 'POST' && url.pathname === '/api/auth/device') return await deviceCode(headers);
       if (request.method === 'POST' && url.pathname === '/api/auth/token') return await deviceToken(request, headers);
       if (request.method === 'GET' && url.pathname === '/api/stats') return await stats(request, url, headers);
+      if (request.method === 'GET' && url.pathname === '/api/telemetry') return await telemetry(request, url, headers);
       if (request.method === 'GET' && url.pathname === '/api/health') return json({ ok: true }, 200, headers);
       return json({ error: 'not found' }, 404, headers);
     } catch (error) {

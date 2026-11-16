@@ -1,103 +1,128 @@
-# Analytics
+# Coso analytics and telemetry
 
-Aggregate, cookie-free analytics for the download page and the web app. The
-native apps (Windows, Android) never load any of this.
+Privacy-first, consent-based analytics for **the download page and the web app
+only**. The Windows and Android builds never load this code and never send a
+request: `mountAnalytics()` and `startTelemetry()` both return immediately in
+the native shells.
 
-- **Collector and API**: one Neon Function (`function/handler.ts` +
-  `function/index.ts`) on the `production` branch, next to Postgres
-  (`function/schema.sql`). `neon.ts` is the source of truth for the deployment.
-- **Dashboard**: static page published under `/Coso/analytics/`, gated by GitHub
-  device-flow login and an allowlist of GitHub logins.
-- **Client**: `analytics/client.js`, loaded by the landing page and by the web
-  app (`src/lib/analytics.ts`). Both stay inert until the endpoint is configured
-  and the visitor accepts.
+Everything lives on one Neon branch (`production`) in three pieces:
 
-Nothing is hosted on a personal server: GitHub Pages serves the static files and
-Neon runs the function and the database.
+| Piece | What it is | URL |
+| --- | --- | --- |
+| `analytics` Function | Pageview collector, GitHub login, dashboard API, retention sweep, server tracing | `https://br-broad-mode-bd85rkq4-analytics.compute.c-8.us-east-2.aws.neon.tech` |
+| `telemetry` Function | OTLP/HTTP JSON receiver: `/v1/traces`, `/v1/metrics` | `https://br-broad-mode-bd85rkq4-telemetry.compute.c-8.us-east-2.aws.neon.tech` |
+| `analytics/client.js` + `analytics/dashboard/` | Shared browser client and the dashboard, published on GitHub Pages | `https://valentain2345.github.io/Coso/analytics/` |
+
+There is no Worker, no third-party analytics account and no CDN: the Functions,
+Postgres, Auth and object storage all come from Lakebase Postgres on Neon.
 
 ## What is stored
 
-| Field | Example | Notes |
-| --- | --- | --- |
-| `day` | `2026-11-15` | UTC, used for the daily salt and retention |
-| `surface` | `site`, `app` | download page or web app |
-| `path` | `/Coso/app/` | no query string, no hash, capped at 200 chars |
-| `referrer` | `news.ycombinator.com` | host only |
-| `source` | `newsletter` | `utm_source`, reduced to a slug |
-| `event` | `pageview`, `download` | `pageview`, `engagement` or a custom slug |
-| `props` | `{"file":"Coso.apk"}` | at most 3 flat props, 40 chars each |
-| `value` | `12` | seconds on the page, for `engagement` |
-| `language` | `es` | primary `Accept-Language` tag |
-| `device` | `mobile` | coarse class from the user agent |
-| `browser`, `os` | `Chrome`, `Android` | coarse class |
-| `visitor` | `6f1c…` | HMAC(secret, day \| ip \| ua), 16 hex chars, rotates daily |
+Pageviews (`hits`):
 
-No cookies, no IP, no full URLs, no audio, no cross-day identifier. Rows older
-than 180 days are deleted by the daily Function Trigger. `DNT` and `Sec-GPC: 1`
-requests are dropped before the database, and so are bots.
+- `ts`, `day`, `surface` (`site` or `app`), `path` (no query string), `referrer`
+  host only, `source` (a `utm_source` slug), `event`, `props`, `value`,
+  `language` (the primary `Accept-Language` tag), coarse `device`, `browser` and
+  `os`, and `visitor`.
+- `visitor` is `HMAC-SHA256(HASH_SECRET, day | ip | user-agent)`, truncated to
+  16 hex characters. The IP itself is never written and the salt changes every
+  day, so two days cannot be joined.
+- Bots, `DNT: 1` and `Sec-GPC: 1` are dropped before the database, on the
+  client and again on the server.
 
-Languages replace countries on purpose: Neon Functions expose no geo headers,
-and sending visitor IPs to a GeoIP service would defeat the point of not storing
-them.
+Telemetry (`otel_spans`, `otel_metrics`):
+
+- Spans from consenting browsers (`documentLoad`, `exception`) and from the
+  analytics Function itself (one SERVER span per request, written in-process).
+- Web vitals (LCP, CLS, INP, TTFB) as OTLP gauges.
+- Same sanitisation as pageviews: no cookie, no address, no query string, no
+  stack trace, no payload-sized string, and credential-looking attribute keys
+  are dropped. `telemetry/otlp.ts` is the single validator used by the receiver,
+  the server exporter and the tests.
+- `visitor` is the same daily HMAC, so a trace can be correlated with a
+  pageview without either table holding an address.
 
 ## Consent
 
-The visitor chooses in the bar on the landing page (or the strip in the web
-app). The choice lives in `localStorage['coso.consent']` for the whole origin,
-so `/Coso/` and `/Coso/app/` share it. Nothing is sent before an explicit
-accept, and "Analytics" in the footer reopens the choice.
-
-## Deploy
-
-Prerequisites: the Neon CLI (`npm i -g neon@latest`), a signed-in session
-(`neon login`) and a linked project (`neon init`/`neon link`). `.env.local` is
-gitignored and holds both the Neon-managed variables and the function secrets:
-
-| Variable | Meaning |
-| --- | --- |
-| `HASH_SECRET` | salt for the daily visitor HMAC; rotating it de-links earlier days |
-| `GITHUB_CLIENT_ID` | public GitHub OAuth app client id (device flow, no secret) |
-| `ALLOWED_LOGINS` | comma-separated GitHub logins allowed to read the dashboard |
-| `ALLOWED_ORIGINS` | comma-separated origins allowed to POST events |
-
-```bash
-neon deploy --env .env.local      # bundles the function, uploads env, applies neon.ts
-neon functions get analytics      # prints the invocation_url
-neon logs query --branch production --source function --since 1h
-```
-
-`neon.ts` declares the function, its env, the `retention` schedule trigger
-(`17 4 * * *` → `POST /cron`) and the branch policy. A missing required secret
-fails the deploy before anything changes.
-
-After the first deploy, put the URL in three places (the tests assert they agree
-with `ANALYTICS_ENDPOINT`):
-
-- `src/lib/analytics.ts` → `ANALYTICS_ENDPOINT` (`…/api/collect`)
-- `Coso audio page/index.html` → `data-endpoint`
-- `analytics/dashboard/index.html` → `data-endpoint` (the origin, no `/api/collect`)
-
-Apply `function/schema.sql` to the branch once (SQL editor or any Postgres
-client); it is idempotent.
-
-The GitHub OAuth App needs **Device Flow enabled** (Settings → Developer
-settings → OAuth Apps → your app → Enable Device Flow).
+`analytics/client.js` owns the choice in `localStorage['coso.consent']` and shows
+the bar. On accept/reject it dispatches `coso:consent` on `window`; the web
+app's `src/lib/telemetry.ts` reads the same key and waits for that event when the
+bar is still open. The OpenTelemetry SDK is a **dynamic import** (`otel-*.js`,
+~56 kB / 18 kB gzip): a visitor who rejects, ignores the bar, sends DNT or GPC,
+or runs a native shell never downloads or executes it.
 
 ## Routes
 
-| Route | Purpose |
-| --- | --- |
-| `POST /api/collect` | one pageview, engagement ping or custom event |
-| `POST /api/auth/device` | start the GitHub device flow (no client secret) |
-| `POST /api/auth/token` | exchange an approved device code for a token |
-| `GET /api/stats` | aggregates for allowlisted GitHub logins (`days`, `surface`) |
-| `GET /api/health` | liveness, no database work |
-| `POST /cron` | retention sweep; only a real Function Trigger delivery is accepted |
+`analytics` Function:
+
+- `POST /api/collect` — one pageview, engagement ping or custom event (204).
+- `POST /api/auth/device` — start the GitHub device flow (public client id, no
+  client secret).
+- `POST /api/auth/token` — exchange an approved device code for a token.
+- `GET /api/stats?days=30&surface=app` — aggregate pageview numbers; requires a
+  token whose login is in `ALLOWED_LOGINS`.
+- `GET /api/telemetry?days=30&surface=app` — vitals, errors, slow spans and
+  server requests; same allowlist.
+- `GET /api/health` — `{"ok":true}`.
+- `POST /cron` — daily retention sweep, only when called by a Neon Function
+  Trigger (verified with `parseTriggerDelivery`).
+
+`telemetry` Function:
+
+- `POST /v1/traces` — OTLP/HTTP JSON, max 100 spans per request, 64 kB body
+  (gzip accepted), `partialSuccess` for anything refused.
+- `POST /v1/metrics` — OTLP/HTTP JSON, max 200 points, gauges and sums only.
+- `GET /api/health` — `{"ok":true}`.
+
+Both Functions answer CORS only for `ALLOWED_ORIGINS`.
+
+## Retention
+
+The `retention` Function Trigger runs daily at `04:17 UTC`
+(`neon.ts` → `triggers.retention`) and deletes:
+
+- `hits` older than **180 days** (`RETENTION_DAYS`),
+- `otel_spans` and `otel_metrics` older than **30 days**
+  (`TELEMETRY_RETENTION_DAYS`).
+
+## Deployment
+
+```powershell
+# from "Coso audio app"
+neon deploy --env .env.local
+```
+
+`neon.ts` is the source of truth: two Functions, their environment variables
+and the retention trigger. `.env.local` holds the secrets and is never
+committed:
+
+- `HASH_SECRET` — salt for the daily HMAC (both Functions).
+- `GITHUB_CLIENT_ID` — public OAuth app client id for the device flow.
+- `ALLOWED_LOGINS` — comma-separated GitHub logins allowed on the dashboard.
+- `ALLOWED_ORIGINS` — comma-separated origins allowed to POST.
+
+Apply the schemas once per branch:
+
+```sql
+-- psql "$DATABASE_URL" -f analytics/function/schema.sql
+-- psql "$DATABASE_URL" -f telemetry/schema.sql
+```
+
+The dashboard is built from `analytics/dashboard/` and published with
+`tools/publish-web.ps1` in the page repository. It loads no external scripts;
+the GitHub token stays in `sessionStorage` and is only sent to the analytics
+Function.
 
 ## Tests
 
-`tests/analyticsFunction.test.ts` runs the handler against an in-memory Postgres
-stub: privacy rules (no IP, daily salt, DNT/GPC, bots), payload validation, CORS,
-the device flow, the stats queries with their allowlist and surface filter, and
-the signed retention trigger. `tests/analyticsClient.test.ts` and
-`tests/analyticsDashboard.test.ts` run the real browser scripts in jsdom.
+```powershell
+npx tsc --noEmit
+npx vitest run
+```
+
+Relevant suites: `tests/analyticsFunction.test.ts` (collector, stats, telemetry
+API, tracing, retention), `tests/analyticsClient.test.ts` (consent bar in a real
+DOM), `tests/telemetryFunction.test.ts` (OTLP receiver), `tests/otel.test.ts`
+(codec and sanitiser), `tests/telemetryBrowser.test.ts` (consent gate),
+`tests/otelExporter.test.ts` (browser exporter) and
+`tests/analyticsDashboard.test.ts` (dashboard rendering).

@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import type { Tracer } from '@opentelemetry/api';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createAnalytics, type Query } from '../analytics/function/handler';
+import { RETENTION_DAYS, TELEMETRY_RETENTION_DAYS, createAnalytics, type Query } from '../analytics/function/handler';
 import {
   acceptLanguage,
   channelOf,
@@ -39,6 +40,63 @@ function makeQuery(canned: Canned[] = []) {
 
 const NOW = Date.parse('2026-11-15T12:00:00Z');
 const UA = 'Mozilla/5.0 (Windows NT 10.0) Chrome/141.0.0.0 Safari/537.36';
+const DAY_MS = 86_400_000;
+
+/**
+ * Records what the handler does to a span without starting the SDK. The real
+ * provider is covered by `otel.test.ts`; here the question is whether the
+ * handler names, attributes and closes its server span correctly.
+ */
+function tracerSpy() {
+  const spans: Array<{
+    name: string;
+    kind: number | undefined;
+    attributes: Row;
+    status: Row;
+    ended: boolean;
+  }> = [];
+
+  const tracer = {
+    startActiveSpan(
+      name: string,
+      optionsOrCallback: unknown,
+      maybeCallback?: (span: unknown) => unknown,
+    ) {
+      const options =
+        typeof optionsOrCallback === 'function'
+          ? undefined
+          : (optionsOrCallback as { kind?: number } | undefined);
+      const callback = (
+        typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback
+      ) as (span: unknown) => unknown;
+
+      const record = { name, kind: options?.kind, attributes: {} as Row, status: {} as Row, ended: false };
+      spans.push(record);
+
+      const span = {
+        setAttributes(values: Row) {
+          Object.assign(record.attributes, values);
+          return span;
+        },
+        setAttribute(key: string, value: unknown) {
+          record.attributes[key] = value;
+          return span;
+        },
+        setStatus(status: Row) {
+          record.status = status;
+          return span;
+        },
+        end() {
+          record.ended = true;
+        },
+      };
+
+      return callback(span);
+    },
+  } as unknown as Tracer;
+
+  return { tracer, spans };
+}
 
 const env = {
   hashSecret: 'test-secret',
@@ -490,6 +548,166 @@ describe('function: stats', () => {
   });
 });
 
+describe('function: telemetry', () => {
+  const canned: Canned[] = [
+    {
+      match: /FROM otel_metrics\s+WHERE day >= \$1::date AND name LIKE 'webvital\.%'/,
+      rows: [
+        { name: 'webvital.cls', p50: 0.012, p75: 0.0234, p95: 0.08, samples: 4, good: 3 },
+        { name: 'webvital.lcp', p50: 1200, p75: 2100, p95: 2600, samples: 4, good: 3 },
+      ],
+    },
+    {
+      match: /FROM otel_spans\s+WHERE day >= \$1::date AND status = 'error'/,
+      rows: [{ name: 'exception', message: 'boom', count: 2, last_seen: '2026-11-15T10:00:00Z' }],
+    },
+    { match: /kind = 'server'/, rows: [{ name: 'GET /api/stats', status: 'ok', count: 5, p75: 120.44 }] },
+    { match: /ORDER BY duration_ms/, rows: [{ name: 'GET /api/stats', count: 5, p75: 120.44, worst: 300 }] },
+    { match: /SELECT \(SELECT COUNT\(\*\)::int FROM otel_spans/, rows: [{ spans: 9, metrics: 4 }] },
+  ];
+
+  const telemetryRequest = (query = '', headers: Record<string, string> = {}) =>
+    call(`/api/telemetry${query}`, { headers });
+
+  it('refuses the endpoint without a token, before touching the database', async () => {
+    const { query, calls } = makeQuery(canned);
+    const response = await app(query).fetch(telemetryRequest());
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'forbidden' });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('refuses a token GitHub rejects', async () => {
+    const { query } = makeQuery(canned);
+    const fetchMock = vi.fn(async () => new Response('nope', { status: 401 })) as unknown as typeof fetch;
+    const response = await app(query, fetchMock).fetch(
+      telemetryRequest('', { authorization: 'Bearer revoked-telemetry' }),
+    );
+    expect(response.status).toBe(403);
+  });
+
+  it('returns vitals, errors, slow spans and requests for an allowlisted login', async () => {
+    const { query, calls } = makeQuery(canned);
+    const fetchMock = vi.fn(async () => Response.json({ login: 'valentain2345' })) as unknown as typeof fetch;
+
+    const response = await app(query, fetchMock).fetch(
+      telemetryRequest('?days=7&surface=app', { authorization: 'Bearer good-telemetry' }),
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as Row & {
+      vitals: Row[];
+      errors: Row[];
+      slowest: Row[];
+      requests: Row[];
+      volume: Row;
+    };
+
+    expect(body).toMatchObject({ login: 'valentain2345', days: 7, surface: 'app' });
+    expect(body.vitals).toEqual([
+      { name: 'webvital.cls', p50: 0.01, p75: 0.02, p95: 0.08, samples: 4, good: 3 },
+      { name: 'webvital.lcp', p50: 1200, p75: 2100, p95: 2600, samples: 4, good: 3 },
+    ]);
+    expect(body.errors[0]).toMatchObject({ name: 'exception', message: 'boom', count: 2 });
+    expect(body.slowest[0]).toMatchObject({ name: 'GET /api/stats', count: 5, p75: 120.44, worst: 300 });
+    expect(body.requests[0]).toMatchObject({ name: 'GET /api/stats', status: 'ok', count: 5, p75: 120.44 });
+    expect(body.volume).toEqual({ spans: 9, metrics: 4 });
+
+    // The surface filter has to reach all five telemetry queries.
+    const telemetryQueries = calls.filter((entry) => /otel_(spans|metrics)/.test(entry.sql));
+    expect(telemetryQueries).toHaveLength(5);
+    for (const statement of telemetryQueries) {
+      expect(statement.sql).toContain('surface = $2');
+      expect(statement.params).toEqual([utcDay(new Date(NOW - 6 * DAY_MS)), 'app']);
+    }
+  });
+
+  it('defaults to thirty days and every surface', async () => {
+    const { query, calls } = makeQuery(canned);
+    const fetchMock = vi.fn(async () => Response.json({ login: 'valentain2345' })) as unknown as typeof fetch;
+
+    const body = (await (
+      await app(query, fetchMock).fetch(
+        telemetryRequest('?days=abc', { authorization: 'Bearer good-telemetry-default' }),
+      )
+    ).json()) as { days: number; surface: string };
+
+    expect(body.days).toBe(30);
+    expect(body.surface).toBe('all');
+
+    const telemetryQueries = calls.filter((entry) => /otel_(spans|metrics)/.test(entry.sql));
+    for (const statement of telemetryQueries) {
+      expect(statement.sql).not.toContain('surface = $2');
+      expect(statement.params).toHaveLength(1);
+    }
+  });
+});
+
+describe('function: tracing', () => {
+  it('wraps a request in one named server span', async () => {
+    const { query } = makeQuery();
+    const { tracer, spans } = tracerSpy();
+
+    const response = await createAnalytics({ query, env, now: () => NOW, tracer }).fetch(
+      call('/api/health'),
+    );
+
+    expect(response.status).toBe(200);
+    expect(spans).toHaveLength(1);
+    expect(spans[0]).toMatchObject({
+      name: 'GET /api/health',
+      kind: 1, // SpanKind.SERVER
+      ended: true,
+      attributes: {
+        'http.request.method': 'GET',
+        'url.path': '/api/health',
+        'coso.surface': 'server',
+        'http.response.status_code': 200,
+      },
+    });
+    // 2xx is not an error, so no status is set at all.
+    expect(spans[0].status).toEqual({});
+  });
+
+  it('marks a 500 as an error span and keeps the handler response', async () => {
+    const query: Query = async () => {
+      throw new Error('connection terminated');
+    };
+    const { tracer, spans } = tracerSpy();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const response = await createAnalytics({ query, env, now: () => NOW, tracer }).fetch(
+      call('/api/collect', { method: 'POST', body: JSON.stringify({ p: '/' }) }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(spans[0].attributes['http.response.status_code']).toBe(500);
+    expect(spans[0].status).toEqual({ code: 2, message: 'server error' }); // SpanStatusCode.ERROR
+    expect(spans[0].ended).toBe(true);
+  });
+
+  it('gives unknown paths a fixed label, never the raw URL', async () => {
+    const { query } = makeQuery();
+    const { tracer, spans } = tracerSpy();
+
+    await createAnalytics({ query, env, now: () => NOW, tracer }).fetch(call('/admin/secret?x=1'));
+
+    expect(spans[0].name).toBe('http.request');
+    expect(spans[0].attributes['url.path']).toBe('/admin/secret');
+  });
+
+  it('does not trace preflight', async () => {
+    const { query } = makeQuery();
+    const { tracer, spans } = tracerSpy();
+
+    await createAnalytics({ query, env, now: () => NOW, tracer }).fetch(
+      call('/api/collect', { method: 'OPTIONS' }),
+    );
+
+    expect(spans).toHaveLength(0);
+  });
+});
+
 describe('function: retention', () => {
   it('deletes rows past the retention window for a real trigger delivery', async () => {
     const { query, calls } = makeQuery([{ match: /WITH deleted/, rows: [{ deleted: 7 }] }]);
@@ -499,6 +717,37 @@ describe('function: retention', () => {
     expect(calls[0].sql).toContain('DELETE FROM hits WHERE day < $1::date');
     expect(calls[0].params[0]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(await response.json()).toMatchObject({ ok: true, deleted: 7 });
+  });
+
+  it('sweeps pageviews and telemetry on their own windows', async () => {
+    const { query, calls } = makeQuery([
+      { match: /DELETE FROM hits/, rows: [{ deleted: 3 }] },
+      { match: /DELETE FROM otel_spans/, rows: [{ deleted: 5 }] },
+      { match: /DELETE FROM otel_metrics/, rows: [{ deleted: 8 }] },
+    ]);
+
+    const response = await app(query).fetch(trigger());
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as Row;
+    expect(body).toMatchObject({
+      ok: true,
+      deleted: 3,
+      deletedSpans: 5,
+      deletedMetrics: 8,
+    });
+    expect(body.cutoff).toBe(utcDay(new Date(NOW - RETENTION_DAYS * DAY_MS)));
+    expect(body.telemetryCutoff).toBe(utcDay(new Date(NOW - TELEMETRY_RETENTION_DAYS * DAY_MS)));
+
+    const tables = calls.map((entry) => entry.sql);
+    expect(tables.some((sql) => sql.includes('DELETE FROM hits'))).toBe(true);
+    expect(tables.some((sql) => sql.includes('DELETE FROM otel_spans WHERE day < $1::date'))).toBe(true);
+    expect(tables.some((sql) => sql.includes('DELETE FROM otel_metrics WHERE day < $1::date'))).toBe(true);
+
+    const telemetry = calls.filter((entry) => /otel_(spans|metrics)/.test(entry.sql));
+    for (const statement of telemetry) {
+      expect(statement.params).toEqual([utcDay(new Date(NOW - TELEMETRY_RETENTION_DAYS * DAY_MS))]);
+    }
   });
 
   it('rejects a plain POST with no trigger header', async () => {

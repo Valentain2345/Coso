@@ -27,6 +27,16 @@ export default defineConfig({
         ALLOWED_ORIGINS: { value: process.env.ALLOWED_ORIGINS, required: true },
       },
     },
+    telemetry: {
+      name: 'Coso telemetry',
+      source: './telemetry/function/index.ts',
+      env: {
+        // Same salt as `analytics`: a span and a pageview share a visitor id.
+        HASH_SECRET: { value: process.env.HASH_SECRET, required: true },
+        // Same allowlist: only our own pages may send spans.
+        ALLOWED_ORIGINS: { value: process.env.ALLOWED_ORIGINS, required: true },
+      },
+    },
   },
   buckets: {
     // "private" is the default; use "public_read" for anonymous reads.

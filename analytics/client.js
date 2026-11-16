@@ -258,6 +258,13 @@
   function decide(value) {
     writeConsent(value);
     close();
+    // The web app's OpenTelemetry gate listens for this; the analytics client
+    // stays the single owner of the stored choice.
+    try {
+      window.dispatchEvent(new CustomEvent('coso:consent', { detail: value }));
+    } catch {
+      // No CustomEvent: the bar still works, telemetry just stays off.
+    }
     if (value === 'granted') pageview();
   }
 
