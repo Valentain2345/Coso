@@ -2,7 +2,7 @@
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { OtlpHttpExporter } from '../src/lib/otel';
+import { OtlpHttpExporter, documentLoadWindow } from '../src/lib/otel';
 
 const TRACE = 'a'.repeat(32);
 const SPAN = 'b'.repeat(16);
@@ -96,5 +96,30 @@ describe('otel: browser exporter', () => {
     exporter().export([], done);
     await vi.waitFor(() => expect(done).toHaveBeenCalledWith({ code: 0 }));
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('otel: page load timing', () => {
+  const origin = Date.parse('2026-11-15T12:00:00Z');
+
+  it('turns navigation offsets into wall-clock time', () => {
+    expect(
+      documentLoadWindow({ startTime: 0, loadEventEnd: 1226, duration: 1300 }, origin),
+    ).toEqual({ startMs: origin, endMs: origin + 1226 });
+  });
+
+  it('falls back to duration and startTime when a field is missing', () => {
+    expect(
+      documentLoadWindow({ startTime: 40, loadEventEnd: 0, duration: 900 }, origin),
+    ).toEqual({ startMs: origin + 40, endMs: origin + 900 });
+  });
+
+  it('never produces a 1970 timestamp for a real navigation', () => {
+    const { startMs, endMs } = documentLoadWindow(
+      { startTime: 0, loadEventEnd: 1500, duration: 1600 },
+      origin,
+    );
+    expect(startMs).toBeGreaterThan(Date.parse('2020-01-01T00:00:00Z'));
+    expect(endMs).toBeGreaterThan(startMs);
   });
 });

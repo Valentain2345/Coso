@@ -139,6 +139,23 @@ const toHrTime = (ms: number): [number, number] => [
   Math.max(0, Math.round((ms % 1000) * 1e6)),
 ];
 
+/**
+ * Wall-clock start and end of the page load.
+ *
+ * Navigation Timing reports `startTime`, `loadEventEnd` and `duration` as
+ * offsets in milliseconds, while `performance.timeOrigin` is an epoch value.
+ * Adding the origin is what keeps `documentLoad` out of 1970.
+ */
+export function documentLoadWindow(
+  navigation: Pick<PerformanceNavigationTiming, 'startTime' | 'loadEventEnd' | 'duration'>,
+  timeOrigin: number,
+): { startMs: number; endMs: number } {
+  return {
+    startMs: timeOrigin + (navigation.startTime || 0),
+    endMs: timeOrigin + (navigation.loadEventEnd || navigation.duration),
+  };
+}
+
 let started = false;
 
 /**
@@ -174,12 +191,16 @@ export function startBrowserTelemetry(options: { endpoint: string; surface: Tele
 
   const tracer = provider.getTracer(SCOPE.name, version);
 
-  // Navigation timings, as one span from time origin to load.
+  // Navigation timings, as one span from time origin to load. The browser
+  // reports these as offsets from `timeOrigin`, not from 1970: add it back so
+  // the stored span carries the real wall-clock time.
   const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
   if (navigation) {
+    const timeOrigin = performance.timeOrigin || Date.now() - performance.now();
+    const { startMs, endMs } = documentLoadWindow(navigation, timeOrigin);
     const span = tracer.startSpan('documentLoad', {
       kind: SpanKind.SERVER,
-      startTime: toHrTime(0),
+      startTime: toHrTime(startMs),
       attributes: {
         'page.path': location.pathname,
         'navigation.type': navigation.type,
@@ -189,7 +210,7 @@ export function startBrowserTelemetry(options: { endpoint: string; surface: Tele
       },
     });
     span.setStatus({ code: SpanStatusCode.OK });
-    span.end(toHrTime(navigation.loadEventEnd || navigation.duration));
+    span.end(toHrTime(endMs));
   }
 
   // Errors. The message is filtered by the exporter (no query strings, 160

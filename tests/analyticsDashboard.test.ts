@@ -42,6 +42,21 @@ const STATS = {
   events: [{ event: 'download', views: 12, visitors: 10, seconds: 0, props: '' }],
 };
 
+const TELEMETRY = {
+  login: 'valentain2345',
+  days: 30,
+  since: '2026-10-17',
+  surface: 'all',
+  vitals: [
+    { name: 'webvital.cls', p50: 0.01, p75: 0.0234, p95: 0.08, samples: 4, good: 3 },
+    { name: 'webvital.lcp', p50: 1200, p75: 2100, p95: 2600, samples: 4, good: 3 },
+  ],
+  errors: [{ name: 'exception', message: 'boom', count: 2, lastSeen: '2026-11-15T10:00:00Z' }],
+  slowest: [{ name: 'GET /api/stats', count: 5, p75: 120.44, worst: 300 }],
+  requests: [{ name: 'GET /api/stats', status: 'ok', count: 5, p75: 120.44 }],
+  volume: { spans: 9, metrics: 4 },
+};
+
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 const settle = async (times = 6) => {
   for (let index = 0; index < times; index += 1) await tick();
@@ -81,6 +96,12 @@ function boot(handler: Handler, options: { token?: string } = {}) {
 
 const statsHandler = (overrides: Record<string, unknown> = {}): Handler => (url) => {
   if (url.pathname === '/api/stats') return { body: { ...STATS, ...overrides } };
+  return { status: 404, body: { error: 'not found' } };
+};
+
+const telemetryHandler = (overrides: Record<string, unknown> = {}): Handler => (url) => {
+  if (url.pathname === '/api/stats') return { body: STATS };
+  if (url.pathname === '/api/telemetry') return { body: { ...TELEMETRY, ...overrides } };
   return { status: 404, body: { error: 'not found' } };
 };
 
@@ -152,6 +173,45 @@ describe('dashboard: signed in', () => {
     (window.document.querySelector('[data-surface="app"]') as HTMLElement).click();
     await settle();
     expect(requests.at(-1)?.url.searchParams.get('surface')).toBe('app');
+  });
+
+  it('renders the OpenTelemetry panel beside the traffic numbers', async () => {
+    const { $, window, requests } = boot(telemetryHandler(), { token: 'gho_test' });
+    await settle();
+
+    // Both endpoints are loaded; telemetry is not on the critical path.
+    expect(requests.map((entry) => entry.url.pathname)).toEqual(
+      expect.arrayContaining(['/api/stats', '/api/telemetry']),
+    );
+
+    expect($('kpi-lcp').textContent).toBe('2100 ms');
+    expect($('kpi-cls').textContent).toBe('0.023');
+    expect($('kpi-inp').textContent).toBe('—');
+    expect($('kpi-errors').textContent).toBe('2');
+    expect($('hint-lcp').textContent).toBe('3/4 good');
+    expect($('hint-inp').textContent).toBe('no samples yet');
+    expect($('hint-errors').textContent).toBe('5 server spans');
+
+    const table = (name: string) =>
+      window.document.querySelector(`table[data-table="${name}"] tbody`)?.textContent;
+    expect(table('vitals')).toContain('LCP');
+    expect(table('vitals')).toContain('2100 ms');
+    expect(table('vitals')).toContain('75.0%');
+    expect(table('exceptions')).toContain('boom');
+    expect(table('slowest')).toContain('120.44 ms');
+    expect(table('requests')).toContain('GET /api/stats');
+  });
+
+  it('keeps the traffic numbers when telemetry is unavailable', async () => {
+    const { $, window } = boot(statsHandler(), { token: 'gho_test' });
+    await settle();
+
+    expect($('app').hidden).toBe(false);
+    expect($('kpi-views').textContent).toBe('120');
+    expect($('kpi-errors').textContent).toBe('—');
+    expect(window.document.querySelector('table[data-table="vitals"] tbody')?.textContent).toContain(
+      'No data yet',
+    );
   });
 
   it('signs out when the account is not allowlisted', async () => {
