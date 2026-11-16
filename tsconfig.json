@@ -17,5 +17,13 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["vite/client"]
   },
-  "include": ["src", "tests", "vite.config.ts", "vitest.config.ts", "capacitor.config.ts"]
+  "include": [
+    "src",
+    "tests",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "capacitor.config.ts",
+    "neon.ts",
+    "analytics/function/index.ts"
+  ]
 }

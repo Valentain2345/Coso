@@ -8,6 +8,7 @@ import '@fontsource/literata/400-italic.css';
 import '@fontsource/literata/600.css';
 import './styles.css';
 import App from './App';
+import { mountAnalytics } from './lib/analytics';
 import { isTauri } from './lib/tauri';
 
 const container = document.getElementById('root');
@@ -30,6 +31,12 @@ requestAnimationFrame(() => {
   if (!boot) return;
   boot.style.opacity = '0';
   window.setTimeout(() => boot.remove(), 300);
+});
+
+// Anonymous analytics: browser builds only, opt-in, and after mount so it can
+// never delay the first paint.
+requestAnimationFrame(() => {
+  if (!isTauri()) mountAnalytics();
 });
 
 // The app-shell service worker is a web/offline optimisation only. In WebView2

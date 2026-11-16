@@ -59,6 +59,12 @@ export function setLang(lang: Lang): void {
   } catch {
     /* private mode: the choice lives for this page load only */
   }
+  // Keep the document language truthful (screen readers, spell check) and let
+  // the analytics consent strip follow the UI language without an import.
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = lang;
+    document.dispatchEvent(new CustomEvent('coso:lang', { detail: lang }));
+  }
   listeners.forEach((listener) => listener());
 }
 

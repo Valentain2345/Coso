@@ -43,9 +43,35 @@ function baseManifestPlugin(): Plugin {
   };
 }
 
+/**
+ * The shared analytics client lives in `analytics/client.js` (outside `src/`)
+ * because the download page publishes the same file. In development the web
+ * app asks for `/analytics/client.js`; without this it would 404.
+ */
+function analyticsClientPlugin(): Plugin {
+  const serve = (server: { middlewares: { use: Function } }) => {
+    server.middlewares.use('/analytics/client.js', (_request: unknown, response: any, next: () => void) => {
+      try {
+        const code = readFileSync(new URL('./analytics/client.js', import.meta.url));
+        response.setHeader('content-type', 'text/javascript; charset=utf-8');
+        response.setHeader('cache-control', 'no-store');
+        response.end(code);
+      } catch {
+        next();
+      }
+    });
+  };
+
+  return {
+    name: 'coso:analytics-client',
+    configureServer: serve,
+    configurePreviewServer: serve,
+  };
+}
+
 export default defineConfig({
   base: process.env.COSO_BASE || '/',
-  plugins: [react(), baseManifestPlugin()],
+  plugins: [react(), baseManifestPlugin(), analyticsClientPlugin()],
   build: {
     outDir: 'dist',
     target: 'es2022',
